@@ -1,0 +1,124 @@
+name: Deploy AttendX
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      - name: Lint with Ruff
+        run: ruff check backend
+      - name: Run Tests
+        run: pytest backend/tests
+
+  changes:
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.event_name != 'pull_request'
+    outputs:
+      terraform: ${{ steps.filter.outputs.terraform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            terraform:
+              - 'terraform/**'
+
+  terraform:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.terraform == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+      - name: Terraform Init
+        working-directory: terraform
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TF_STATE_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
+            -backend-config="key=attendx.tfstate"
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve -var acr_name=${{ vars.ACR_NAME }}
+
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    needs: [test, terraform]
+    if: always() && needs.test.result == 'success' && needs.terraform.result != 'failure' && github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Azure CLI ACR Login
+        run: az acr login --name ${{ vars.ACR_NAME }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ vars.ACR_NAME }}.azurecr.io/attendx-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Set AKS Context
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ vars.RESOURCE_GROUP }}
+          cluster-name: ${{ vars.AKS_NAME }}
+      - name: Deploy Kubernetes Manifests
+        run: |
+          kubectl apply -f k8s/app/namespace.yaml -f k8s/monitoring/namespace.yaml
+
+          kubectl -n cv-attendance create secret generic backend-secrets \
+            --from-literal=DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            --from-literal=SIGNUP_INVITE_CODE="${{ secrets.SIGNUP_INVITE_CODE }}" \
+            --from-literal=ADMIN_EMAIL="${{ secrets.ADMIN_EMAIL }}" \
+            --from-literal=ADMIN_PASSWORD="${{ secrets.ADMIN_PASSWORD }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl -n monitoring create secret generic grafana-admin \
+            --from-literal=admin-password="${{ secrets.GRAFANA_ADMIN_PASSWORD }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          export ACR_LOGIN_SERVER=${{ vars.ACR_NAME }}.azurecr.io
+          export IMAGE_TAG=${{ github.sha }}
+
+          kubectl apply -f k8s/app/namespace.yaml -f k8s/app/configmap.yaml -f k8s/app/service.yaml
+          envsubst < k8s/app/deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/monitoring/
+
+          kubectl -n cv-attendance rollout status deployment/attendx-backend --timeout=300s
+      - name: Print Service IPs
+        run: |
+          echo "Backend Service:"
+          kubectl -n cv-attendance get svc attendx-backend-service
+          echo "Grafana Service:"
+          kubectl -n monitoring get svc grafana
