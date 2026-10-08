@@ -1,0 +1,6 @@
+location       = "centralindia"
+resource_group = "attendx-rg"
+aks_name       = "attendx-aks"
+dns_prefix     = "attendx-aks"
+acr_name       = "attendxacr98765"
+node_vm_size   = "Standard_B2s"
