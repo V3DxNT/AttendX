@@ -4,14 +4,14 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "backend/.env"), extra="ignore")
 
-    DATABASE_URL: str
-    JWT_SECRET: str
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/postgres"
+    JWT_SECRET: str = "change-me-to-at-least-32-random-bytes"
     JWT_ACCESS_MINUTES: int = 15
     JWT_REFRESH_DAYS: int = 7
     COOKIE_SECURE: bool = False
-    SIGNUP_INVITE_CODE: str
+    SIGNUP_INVITE_CODE: str = "change-me"
     ADMIN_EMAIL: Optional[str] = None
     ADMIN_PASSWORD: Optional[str] = None
     FRONTEND_URL: str = "http://localhost:3000"

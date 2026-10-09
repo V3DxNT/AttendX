@@ -3,21 +3,16 @@ import hashlib
 import secrets
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
-from uuid import UUID, uuid4
+from uuid import UUID
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
 from fastapi import Cookie, Depends, Request, Response
 import jwt
 
 from app.config import settings
 from app.database import (
-    create_refresh_token,
     create_user,
-    get_refresh_token,
     get_user_by_email,
     get_user_by_id,
-    revoke_refresh_token,
-    revoke_refresh_token_family,
 )
 from app.errors import AppError
 

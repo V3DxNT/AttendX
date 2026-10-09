@@ -112,7 +112,7 @@ async def get_student(
 @router.delete("/{usn}")
 async def remove_student(
     usn: str,
-    admin_user: dict = Depends(require_role("admin")),
+    _: dict = Depends(require_role("admin")),
 ):
     deleted = await delete_student(usn)
     if not deleted:
