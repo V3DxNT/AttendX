@@ -15,3 +15,8 @@ k8s/monitoring/secret.yaml
 *.tfvars
 !terraform.tfvars.example
 .DS_Store
+node_modules/
+.next/
+out/
+build/
+frontend/.env.local

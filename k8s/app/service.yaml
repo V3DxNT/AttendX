@@ -4,9 +4,9 @@ metadata:
   name: attendx-backend-service
   namespace: cv-attendance
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
-    - port: 80
+    - port: 8000
       targetPort: 8000
       protocol: TCP
       name: http
