@@ -232,7 +232,29 @@ export default function LiveScannerPage() {
     };
   }, [session, isPaused, scanInterval]);
 
-  if (authLoading || !user) {
+  if (authLoading || (!session && !cameraError)) {
+    return (
+      <div className="container" style={{ padding: "32px 24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <div className="skeleton" style={{ width: "120px", height: "20px" }} />
+          <div className="skeleton" style={{ width: "240px", height: "24px" }} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "24px" }}>
+          <div className="card" style={{ height: "480px", display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div className="skeleton" style={{ width: "100%", height: "100%", borderRadius: "12px" }} />
+          </div>
+          <div className="card" style={{ height: "480px", display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div className="skeleton" style={{ width: "160px", height: "24px" }} />
+            <div className="skeleton" style={{ width: "100%", height: "80px", borderRadius: "10px" }} />
+            <div className="skeleton" style={{ width: "100%", height: "80px", borderRadius: "10px" }} />
+            <div className="skeleton" style={{ width: "100%", height: "80px", borderRadius: "10px" }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
     return null;
   }
 

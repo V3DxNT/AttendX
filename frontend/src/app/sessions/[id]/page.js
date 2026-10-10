@@ -7,6 +7,7 @@ import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../context/ToastContext";
 import { apiFetch } from "../../../lib/api";
 import ConfirmModal from "../../../components/ConfirmModal";
+import { SkeletonSessionDashboard } from "../../../components/Skeleton";
 import { Camera, Download, Trash2, Plus, AlertCircle, CheckCircle2, StopCircle, ArrowLeft, Clock, Calendar, ArrowUpDown, Search } from "lucide-react";
 
 export default function SessionDetailPage() {
@@ -208,7 +209,16 @@ export default function SessionDetailPage() {
     return list;
   }, [dashboard, searchQuery, sortBy]);
 
-  if (authLoading || !user) {
+  if (authLoading) {
+    return (
+      <div className="container" style={{ padding: "40px 24px" }}>
+        <div className="skeleton" style={{ width: "140px", height: "20px", marginBottom: "20px" }} />
+        <SkeletonSessionDashboard />
+      </div>
+    );
+  }
+
+  if (!user) {
     return null;
   }
 
@@ -227,9 +237,7 @@ export default function SessionDetailPage() {
       </div>
 
       {loading || !dashboard ? (
-        <div className="card" style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-secondary)" }}>
-          Loading session dashboard...
-        </div>
+        <SkeletonSessionDashboard />
       ) : (
         <>
           <div className="card" style={{ marginBottom: "32px" }}>

@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { apiFetch } from "../../lib/api";
 import ConfirmModal from "../../components/ConfirmModal";
+import { SkeletonStudentTable } from "../../components/Skeleton";
 import { Plus, Search, Trash2, Camera, AlertCircle, X, Check, RotateCcw } from "lucide-react";
 
 export default function StudentsPage() {
@@ -214,7 +215,23 @@ export default function StudentsPage() {
     }
   };
 
-  if (authLoading || !user) {
+  if (authLoading) {
+    return (
+      <div className="container" style={{ padding: "40px 24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
+          <div>
+            <div className="skeleton" style={{ width: "260px", height: "32px", marginBottom: "8px" }} />
+            <div className="skeleton" style={{ width: "180px", height: "16px" }} />
+          </div>
+          <div className="skeleton skeleton-btn" style={{ width: "140px", height: "40px" }} />
+        </div>
+        <div className="skeleton" style={{ width: "320px", height: "42px", marginBottom: "24px", borderRadius: "8px" }} />
+        <SkeletonStudentTable rows={6} />
+      </div>
+    );
+  }
+
+  if (!user) {
     return null;
   }
 
@@ -249,9 +266,7 @@ export default function StudentsPage() {
       </div>
 
       {loading ? (
-        <div className="card" style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-secondary)" }}>
-          Loading students...
-        </div>
+        <SkeletonStudentTable rows={6} />
       ) : students.length === 0 ? (
         <div className="card" style={{ textAlign: "center", padding: "64px 20px" }}>
           <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "8px" }}>No students found</h3>

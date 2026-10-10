@@ -7,6 +7,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { apiFetch } from "../../lib/api";
 import ConfirmModal from "../../components/ConfirmModal";
+import { SkeletonSessionTable } from "../../components/Skeleton";
+import { CapDoodle, StarDoodle } from "../../components/DoodleIcons";
 import { Plus, Camera, BarChart3, AlertCircle, X, CheckCircle2, Calendar, Clock, Trash2 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -141,7 +143,27 @@ export default function DashboardPage() {
     }
   };
 
-  if (authLoading || !user) {
+  if (authLoading) {
+    return (
+      <div className="container" style={{ padding: "40px 24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
+          <div>
+            <div className="skeleton" style={{ width: "240px", height: "32px", marginBottom: "8px" }} />
+            <div className="skeleton" style={{ width: "360px", height: "16px" }} />
+          </div>
+          <div className="skeleton skeleton-btn" style={{ width: "130px", height: "40px" }} />
+        </div>
+        <div style={{ display: "flex", gap: "8px", marginBottom: "28px" }}>
+          <div className="skeleton skeleton-btn" style={{ width: "64px", height: "32px" }} />
+          <div className="skeleton skeleton-btn" style={{ width: "64px", height: "32px" }} />
+          <div className="skeleton skeleton-btn" style={{ width: "96px", height: "32px" }} />
+        </div>
+        <SkeletonSessionTable rows={5} />
+      </div>
+    );
+  }
+
+  if (!user) {
     return null;
   }
 
@@ -151,7 +173,13 @@ export default function DashboardPage() {
     <div className="container" style={{ padding: "40px 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 style={{ fontSize: "1.85rem", fontWeight: 800, letterSpacing: "-0.02em", marginBottom: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+            <span className="doodle-badge">
+              <CapDoodle size={16} /> Student Attendance Portal
+            </span>
+            <span className="doodle-tag">✦ campus live</span>
+          </div>
+          <h1 style={{ fontSize: "1.9rem", fontWeight: 800, letterSpacing: "-0.02em", marginBottom: "4px" }}>
             Attendance Sessions
           </h1>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem" }}>
@@ -204,9 +232,7 @@ export default function DashboardPage() {
       </div>
 
       {loading ? (
-        <div className="card" style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-secondary)" }}>
-          Loading sessions...
-        </div>
+        <SkeletonSessionTable rows={5} />
       ) : filteredSessions.length === 0 ? (
         <div className="card" style={{ textAlign: "center", padding: "64px 20px" }}>
           <div className="brand-icon" style={{ margin: "0 auto 16px auto", width: "48px", height: "48px", opacity: 0.8 }}>
