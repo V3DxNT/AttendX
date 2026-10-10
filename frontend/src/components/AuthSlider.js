@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-import { Camera, AlertCircle, ArrowRight, UserPlus, LogIn, Sparkles, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowRight, UserPlus, LogIn, ExternalLink } from "lucide-react";
 import { CapDoodle, StarDoodle, SparkleDoodle, NotebookDoodle } from "./DoodleIcons";
 
 export default function AuthSlider({ initialMode = "login" }) {
@@ -101,7 +101,12 @@ export default function AuthSlider({ initialMode = "login" }) {
           <div style={{ marginBottom: "28px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
               <span className="doodle-badge">
-                <CapDoodle size={16} /> Student & Faculty Portal
+                <img
+                  src="/graduated.png"
+                  alt="AttendX"
+                  style={{ width: "16px", height: "16px", objectFit: "contain" }}
+                />
+                Student & Faculty Portal
               </span>
               <span className="doodle-tag">✦ welcome</span>
             </div>
@@ -155,6 +160,20 @@ export default function AuthSlider({ initialMode = "login" }) {
               {!loginLoading && <ArrowRight size={16} />}
             </button>
           </form>
+
+          <div style={{ marginTop: "24px", textAlign: "center" }}>
+            <a
+              href="https://www.vedx.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="creator-navbar-badge"
+              style={{ fontSize: "0.8rem", padding: "4px 12px" }}
+            >
+              <span>Built by Ved</span>
+              <span style={{ opacity: 0.65 }}>vedx.dev</span>
+              <ExternalLink size={11} />
+            </a>
+          </div>
         </div>
 
         <div
@@ -169,7 +188,12 @@ export default function AuthSlider({ initialMode = "login" }) {
           <div style={{ marginBottom: "24px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
               <span className="doodle-badge">
-                <NotebookDoodle size={16} /> New Registration
+                <img
+                  src="/graduated.png"
+                  alt="AttendX"
+                  style={{ width: "16px", height: "16px", objectFit: "contain" }}
+                />
+                New Registration
               </span>
               <span className="doodle-tag">✦ join us</span>
             </div>
@@ -247,13 +271,31 @@ export default function AuthSlider({ initialMode = "login" }) {
               {!signupLoading && <UserPlus size={16} />}
             </button>
           </form>
+
+          <div style={{ marginTop: "20px", textAlign: "center" }}>
+            <a
+              href="https://www.vedx.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="creator-navbar-badge"
+              style={{ fontSize: "0.8rem", padding: "4px 12px" }}
+            >
+              <span>Built by Ved</span>
+              <span style={{ opacity: 0.65 }}>vedx.dev</span>
+              <ExternalLink size={11} />
+            </a>
+          </div>
         </div>
 
         <div className="auth-slider-overlay">
           {!isSignUp ? (
             <div>
               <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginBottom: "18px" }}>
-                <CapDoodle size={36} color="#ffffff" />
+                <img
+                  src="/graduated.png"
+                  alt="AttendX"
+                  style={{ width: "48px", height: "48px", objectFit: "contain", filter: "brightness(0) invert(1)" }}
+                />
                 <StarDoodle size={28} color="#fde047" />
               </div>
               <h2 style={{ fontSize: "1.85rem", fontWeight: 800, marginBottom: "12px", letterSpacing: "-0.02em" }}>

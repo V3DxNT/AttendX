@@ -175,7 +175,12 @@ export default function DashboardPage() {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
             <span className="doodle-badge">
-              <CapDoodle size={16} /> Student Attendance Portal
+              <img
+                src="/graduated.png"
+                alt="AttendX"
+                style={{ width: "18px", height: "18px", objectFit: "contain" }}
+              />
+              Student Attendance Portal
             </span>
             <span className="doodle-tag">✦ campus live</span>
           </div>

@@ -261,9 +261,15 @@ export default function LiveScannerPage() {
   return (
     <div className="container" style={{ padding: "32px 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
-        <Link href={`/sessions/${sessionId}`} style={{ color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.9rem" }}>
-          <ArrowLeft size={16} /> Exit Scanner
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <Link href={`/sessions/${sessionId}`} style={{ color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.9rem" }}>
+            <ArrowLeft size={16} /> Exit Scanner
+          </Link>
+          <span className="doodle-badge" style={{ padding: "4px 10px", fontSize: "0.8rem" }}>
+            <img src="/graduated.png" alt="AttendX" style={{ width: "14px", height: "14px", objectFit: "contain" }} />
+            AttendX Scanner
+          </span>
+        </div>
         {session && (
           <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
             <span style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>

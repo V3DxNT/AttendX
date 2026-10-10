@@ -7,6 +7,7 @@ import { useToast } from "../../context/ToastContext";
 import { apiFetch } from "../../lib/api";
 import ConfirmModal from "../../components/ConfirmModal";
 import { SkeletonStudentTable } from "../../components/Skeleton";
+import { NotebookDoodle, StarDoodle } from "../../components/DoodleIcons";
 import { Plus, Search, Trash2, Camera, AlertCircle, X, Check, RotateCcw } from "lucide-react";
 
 export default function StudentsPage() {
@@ -239,7 +240,18 @@ export default function StudentsPage() {
     <div className="container" style={{ padding: "40px 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 style={{ fontSize: "1.85rem", fontWeight: 800, letterSpacing: "-0.02em", marginBottom: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+            <span className="doodle-badge">
+              <img
+                src="/graduated.png"
+                alt="AttendX"
+                style={{ width: "18px", height: "18px", objectFit: "contain" }}
+              />
+              Campus Student Directory
+            </span>
+            <span className="doodle-tag">✦ roster</span>
+          </div>
+          <h1 style={{ fontSize: "1.9rem", fontWeight: 800, letterSpacing: "-0.02em", marginBottom: "4px" }}>
             Student Enrollment Directory
           </h1>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem" }}>

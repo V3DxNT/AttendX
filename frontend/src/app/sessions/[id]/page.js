@@ -8,6 +8,7 @@ import { useToast } from "../../../context/ToastContext";
 import { apiFetch } from "../../../lib/api";
 import ConfirmModal from "../../../components/ConfirmModal";
 import { SkeletonSessionDashboard } from "../../../components/Skeleton";
+import { CapDoodle } from "../../../components/DoodleIcons";
 import { Camera, Download, Trash2, Plus, AlertCircle, CheckCircle2, StopCircle, ArrowLeft, Clock, Calendar, ArrowUpDown, Search } from "lucide-react";
 
 export default function SessionDetailPage() {
@@ -243,6 +244,17 @@ export default function SessionDetailPage() {
           <div className="card" style={{ marginBottom: "32px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "20px" }}>
               <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                  <span className="doodle-badge">
+                    <img
+                      src="/graduated.png"
+                      alt="AttendX"
+                      style={{ width: "18px", height: "18px", objectFit: "contain" }}
+                    />
+                    Lecture Session
+                  </span>
+                  <span className="doodle-tag">✦ attendance</span>
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px", flexWrap: "wrap" }}>
                   <h1 style={{ fontSize: "1.75rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
                     {dashboard.subject_name}

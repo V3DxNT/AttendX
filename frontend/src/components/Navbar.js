@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-import { Camera, Users, Calendar, LogOut, Shield } from "lucide-react";
+import { Users, Calendar, LogOut, Shield, ExternalLink } from "lucide-react";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -16,12 +16,19 @@ export default function Navbar() {
   return (
     <nav className="navbar">
       <div className="container navbar-inner">
-        <div style={{ display: "flex", alignItems: "center", gap: "36px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
           <Link href="/dashboard" className="brand">
             <div className="brand-icon">
-              <Camera size={20} />
+              <img
+                src="/graduated.png"
+                alt="AttendX"
+                style={{ width: "24px", height: "24px", objectFit: "contain" }}
+              />
             </div>
-            <span>AttendX</span>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+              <span>AttendX</span>
+              <span className="doodle-tag" style={{ fontSize: "1.05rem", color: "var(--accent-indigo)" }}>portal</span>
+            </div>
           </Link>
 
           {user && (
@@ -44,9 +51,20 @@ export default function Navbar() {
           )}
         </div>
 
-        <div>
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <a
+            href="https://www.vedx.dev"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="creator-navbar-badge"
+            title="Portfolio of Ved"
+          >
+            <span>by Ved</span>
+            <ExternalLink size={12} />
+          </a>
+
           {user ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <div className="user-badge">
                 <span style={{ fontWeight: 600 }}>{user.full_name}</span>
                 <span className={`role-tag ${user.role}`}>
@@ -59,7 +77,7 @@ export default function Navbar() {
               </button>
             </div>
           ) : (
-            <div style={{ display: "flex", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "10px" }}>
               <Link href="/login" className="btn btn-secondary btn-sm">
                 Log In
               </Link>

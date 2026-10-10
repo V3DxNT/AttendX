@@ -2,6 +2,7 @@ import "./globals.css";
 import { AuthProvider } from "../context/AuthContext";
 import { ToastProvider } from "../context/ToastContext";
 import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 
 export const metadata = {
   title: "AttendX — Computer Vision Attendance System",
@@ -19,8 +20,13 @@ export default function RootLayout({ children }) {
       <body>
         <ToastProvider>
           <AuthProvider>
-            <Navbar />
-            <main>{children}</main>
+            <div className="liquid-screen-wrapper">
+              <div className="liquid-glass-shell">
+                <Navbar />
+                <main className="liquid-content-screen">{children}</main>
+                <Footer />
+              </div>
+            </div>
           </AuthProvider>
         </ToastProvider>
       </body>
