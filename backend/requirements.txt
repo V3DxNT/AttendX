@@ -2,6 +2,7 @@ fastapi==0.103.2
 uvicorn[standard]==0.23.2
 pydantic==2.4.2
 pydantic-settings==2.0.3
+email-validator==2.0.0.post2
 asyncpg==0.28.0
 pgvector==0.2.5
 numpy==1.26.0

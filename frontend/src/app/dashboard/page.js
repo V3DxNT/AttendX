@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { apiFetch } from "../../lib/api";
-import { Plus, Camera, BarChart3, AlertCircle, X, CheckCircle2 } from "lucide-react";
+import { Plus, Camera, BarChart3, AlertCircle, X, CheckCircle2, Calendar } from "lucide-react";
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();

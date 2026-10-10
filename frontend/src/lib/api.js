@@ -50,7 +50,7 @@ export async function apiFetch(endpoint, options = {}) {
 
   let response = await fetch(endpoint, config);
 
-  if (response.status === 401 && !options._retry && endpoint !== "/api/v1/auth/login" && endpoint !== "/api/v1/auth/signup" && endpoint !== "/api/v1/auth/refresh") {
+  if (response.status === 401 && !options._retry && endpoint !== "/api/v1/auth/login" && endpoint !== "/api/v1/auth/signup" && endpoint !== "/api/v1/auth/refresh" && endpoint !== "/api/v1/auth/me") {
     if (!isRefreshing) {
       isRefreshing = true;
       const refreshed = await refreshToken();

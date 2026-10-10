@@ -1,7 +1,7 @@
 from typing import Any, List, Optional
 from uuid import UUID
 import re
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 class UserResponse(BaseModel):
     id: UUID
@@ -10,10 +10,18 @@ class UserResponse(BaseModel):
     role: str
 
 class SignupRequest(BaseModel):
-    email: EmailStr
+    email: str
     full_name: str = Field(..., min_length=1, max_length=100)
     password: str = Field(..., min_length=8, max_length=128)
     invite_code: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        clean = v.strip().lower()
+        if not re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", clean):
+            raise ValueError("Invalid email address format")
+        return clean
 
     @field_validator("password")
     @classmethod
@@ -25,8 +33,16 @@ class SignupRequest(BaseModel):
         return v
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        clean = v.strip().lower()
+        if not re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", clean):
+            raise ValueError("Invalid email address format")
+        return clean
 
 class StudentRegisterRequest(BaseModel):
     usn: str
