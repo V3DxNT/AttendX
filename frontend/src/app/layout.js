@@ -18,6 +18,8 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
+        <div className="liquid-bg-overlay" />
+        <div className="liquid-bg-tint" />
         <ToastProvider>
           <AuthProvider>
             <div className="liquid-screen-wrapper">

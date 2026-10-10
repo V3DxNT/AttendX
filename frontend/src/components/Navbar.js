@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-import { Users, Calendar, LogOut, Shield, ExternalLink } from "lucide-react";
+import { Users, Calendar, LogOut, Shield } from "lucide-react";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -52,16 +52,6 @@ export default function Navbar() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <a
-            href="https://www.vedx.dev"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="creator-navbar-badge"
-            title="Portfolio of Ved"
-          >
-            <span>by Ved</span>
-            <ExternalLink size={12} />
-          </a>
 
           {user ? (
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>

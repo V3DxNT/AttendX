@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-import { AlertCircle, ArrowRight, UserPlus, LogIn, ExternalLink } from "lucide-react";
+import { AlertCircle, ArrowRight, UserPlus, LogIn } from "lucide-react";
 import { CapDoodle, StarDoodle, SparkleDoodle, NotebookDoodle } from "./DoodleIcons";
 
 export default function AuthSlider({ initialMode = "login" }) {
@@ -160,20 +160,6 @@ export default function AuthSlider({ initialMode = "login" }) {
               {!loginLoading && <ArrowRight size={16} />}
             </button>
           </form>
-
-          <div style={{ marginTop: "24px", textAlign: "center" }}>
-            <a
-              href="https://www.vedx.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="creator-navbar-badge"
-              style={{ fontSize: "0.8rem", padding: "4px 12px" }}
-            >
-              <span>Built by Ved</span>
-              <span style={{ opacity: 0.65 }}>vedx.dev</span>
-              <ExternalLink size={11} />
-            </a>
-          </div>
         </div>
 
         <div
@@ -250,15 +236,18 @@ export default function AuthSlider({ initialMode = "login" }) {
             </div>
 
             <div className="form-group" style={{ marginBottom: "20px" }}>
-              <label className="form-label">Invite Code</label>
+              <label className="form-label">Faculty Invite Code</label>
               <input
                 type="text"
                 required
                 className="form-input"
                 value={signupInviteCode}
                 onChange={(e) => setSignupInviteCode(e.target.value)}
-                placeholder="ATTENDX-FACULTY-XXXX"
+                placeholder="attendx-secret-invite-2026"
               />
+              <span style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "6px" }}>
+                Campus faculty code: <code style={{ color: "var(--accent-indigo)", fontWeight: 600 }}>attendx-secret-invite-2026</code>
+              </span>
             </div>
 
             <button
@@ -271,20 +260,6 @@ export default function AuthSlider({ initialMode = "login" }) {
               {!signupLoading && <UserPlus size={16} />}
             </button>
           </form>
-
-          <div style={{ marginTop: "20px", textAlign: "center" }}>
-            <a
-              href="https://www.vedx.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="creator-navbar-badge"
-              style={{ fontSize: "0.8rem", padding: "4px 12px" }}
-            >
-              <span>Built by Ved</span>
-              <span style={{ opacity: 0.65 }}>vedx.dev</span>
-              <ExternalLink size={11} />
-            </a>
-          </div>
         </div>
 
         <div className="auth-slider-overlay">
