@@ -4,6 +4,7 @@ from typing import Any, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse, urlunparse
 from uuid import UUID
 import asyncpg
+import numpy as np
 
 _pool: Optional[asyncpg.Pool] = None
 
@@ -69,8 +70,13 @@ async def check_db_ready() -> bool:
     except Exception:
         return False
 
-def vector_to_str(vec: List[float]) -> str:
-    return "[" + ",".join(f"{x:.6f}" for x in vec) + "]"
+def to_vector_param(vec: Any) -> np.ndarray:
+    if isinstance(vec, np.ndarray):
+        return vec.astype(np.float32)
+    return np.array(vec, dtype=np.float32)
+
+def vector_to_str(vec: Any) -> np.ndarray:
+    return to_vector_param(vec)
 
 async def get_user_by_email(email: str) -> Optional[dict]:
     pool = get_pool()
@@ -152,18 +158,19 @@ async def revoke_refresh_token_family(family_id: UUID) -> None:
         family_id,
     )
 
-async def find_nearest_duplicate_face(vector_str: str, threshold: float) -> Optional[dict]:
+async def find_nearest_duplicate_face(vector_str: Any, threshold: float) -> Optional[dict]:
     pool = get_pool()
+    vec = to_vector_param(vector_str)
     row = await pool.fetchrow(
         """
-        SELECT s.id, s.usn, s.full_name, (e.embedding <=> $1::vector) AS distance
+        SELECT s.id, s.usn, s.full_name, (e.embedding <=> $1) AS distance
         FROM student_embeddings e
         JOIN students s ON s.id = e.student_id
-        WHERE (e.embedding <=> $1::vector) < $2
-        ORDER BY e.embedding <=> $1::vector
+        WHERE (e.embedding <=> $1) < $2
+        ORDER BY e.embedding <=> $1
         LIMIT 1
         """,
-        vector_str,
+        vec,
         threshold,
     )
     return dict(row) if row else None
@@ -173,7 +180,7 @@ async def register_student_with_embeddings(
     full_name: str,
     thumbnail: str,
     created_by: UUID,
-    vector_strs: List[str],
+    vector_strs: List[Any],
 ) -> dict:
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -190,14 +197,15 @@ async def register_student_with_embeddings(
                 created_by,
             )
             student_id = student_row["id"]
-            for vec_str in vector_strs:
+            for vec_val in vector_strs:
+                vec = to_vector_param(vec_val)
                 await conn.execute(
                     """
                     INSERT INTO student_embeddings (student_id, embedding)
-                    VALUES ($1, $2::vector)
+                    VALUES ($1, $2)
                     """,
                     student_id,
-                    vec_str,
+                    vec,
                 )
             return dict(student_row)
 
@@ -310,18 +318,19 @@ async def end_session(session_id: UUID) -> Optional[dict]:
     )
     return dict(row) if row else None
 
-async def find_nearest_student_face(vector_str: str) -> Optional[dict]:
+async def find_nearest_student_face(vector_str: Any) -> Optional[dict]:
     pool = get_pool()
+    vec = to_vector_param(vector_str)
     row = await pool.fetchrow(
         """
         SELECT s.id, s.usn, s.full_name, s.thumbnail,
-               (e.embedding <=> $1::vector) AS distance
+               (e.embedding <=> $1) AS distance
         FROM student_embeddings e
         JOIN students s ON s.id = e.student_id
-        ORDER BY e.embedding <=> $1::vector
+        ORDER BY e.embedding <=> $1
         LIMIT 1
         """,
-        vector_str,
+        vec,
     )
     return dict(row) if row else None
 

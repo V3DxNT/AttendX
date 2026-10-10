@@ -16,6 +16,7 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState("");
+  const [modalError, setModalError] = useState("");
   const [success, setSuccess] = useState("");
 
   const [usn, setUsn] = useState("");
@@ -24,7 +25,7 @@ export default function StudentsPage() {
   const [extraImages, setExtraImages] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
-  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraMode, setCameraMode] = useState(null);
   const [cameraError, setCameraError] = useState("");
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -66,7 +67,7 @@ export default function StudentsPage() {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-    setCameraActive(false);
+    setCameraMode(null);
   }, []);
 
   const attachVideo = useCallback((node) => {
@@ -77,8 +78,9 @@ export default function StudentsPage() {
     }
   }, []);
 
-  const startCamera = async () => {
+  const startCamera = async (mode = "primary") => {
     setCameraError("");
+    setModalError("");
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
@@ -91,18 +93,18 @@ export default function StudentsPage() {
         },
       });
       streamRef.current = stream;
-      setCameraActive(true);
+      setCameraMode(mode);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play().catch(() => {});
       }
     } catch (err) {
       setCameraError("Unable to access camera. Please allow camera permissions in your browser.");
-      setCameraActive(false);
+      setCameraMode(null);
     }
   };
 
-  const capturePhoto = (isPrimary = true) => {
+  const capturePhoto = () => {
     const v = videoRef.current;
     if (!v || v.readyState < 2 || !v.videoWidth || !v.videoHeight) {
       setCameraError("Camera is not ready yet. Please wait a moment and try again.");
@@ -116,43 +118,46 @@ export default function StudentsPage() {
     ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
     const b64 = canvas.toDataURL("image/jpeg", 0.92);
 
-    if (isPrimary) {
+    if (cameraMode === "primary") {
       setPrimaryImage(b64);
-      stopCamera();
-    } else {
+    } else if (cameraMode === "extra") {
       if (extraImages.length < 2) {
         setExtraImages((prev) => [...prev, b64]);
       }
     }
+    stopCamera();
     setCameraError("");
   };
 
   const openEnrollModal = () => {
     setShowModal(true);
     setError("");
+    setModalError("");
     setSuccess("");
     setCameraError("");
     setUsn("");
     setFullName("");
     setPrimaryImage("");
     setExtraImages([]);
-    startCamera();
+    startCamera("primary");
   };
 
   const closeEnrollModal = () => {
     stopCamera();
     setShowModal(false);
     setCameraError("");
+    setModalError("");
   };
 
   const handleRegisterStudent = async (e) => {
     e.preventDefault();
     if (!primaryImage) {
-      setError("Please capture a primary face photo from the camera before submitting.");
+      setModalError("Please capture a primary face photo from the camera before submitting.");
       return;
     }
 
     setSubmitting(true);
+    setModalError("");
     setError("");
 
     try {
@@ -171,19 +176,19 @@ export default function StudentsPage() {
       fetchStudents();
     } catch (err) {
       if (err.code === "FACE_ALREADY_ENROLLED") {
-        setError(`Face is already registered under USN: ${err.data?.usn || "another student"}`);
+        setModalError(`Face is already registered under USN: ${err.data?.usn || "another student"}`);
       } else if (err.code === "USN_EXISTS") {
-        setError(`USN ${usn.toUpperCase()} is already registered.`);
+        setModalError(`USN ${usn.toUpperCase()} is already registered.`);
       } else if (err.code === "NO_FACE_DETECTED") {
-        setError("No face detected in photo. Please ensure face is clearly visible, well lit, and centered in camera.");
+        setModalError("No face detected in photo. Please ensure face is clearly visible, well lit, and centered in camera.");
       } else if (err.code === "MULTIPLE_FACES_DETECTED") {
-        setError("Multiple faces detected in photo. Only one person should be in view.");
+        setModalError("Multiple faces detected in photo. Only one person should be in view.");
       } else if (err.code === "FACE_TOO_SMALL") {
-        setError("Face is too far from camera. Please move closer and retake photo.");
+        setModalError("Face is too far from camera. Please move closer and retake photo.");
       } else if (err.code === "LOW_QUALITY_FACE") {
-        setError("Face photo quality or lighting is too low. Please ensure direct lighting and retake.");
+        setModalError("Face photo quality or lighting is too low. Please ensure direct lighting and retake.");
       } else {
-        setError(err.message || "Failed to register student.");
+        setModalError(err.message || "Failed to register student.");
       }
     } finally {
       setSubmitting(false);
@@ -328,6 +333,13 @@ export default function StudentsPage() {
               </button>
             </div>
 
+            {modalError && (
+              <div className="alert alert-error" style={{ marginBottom: "16px" }}>
+                <AlertCircle size={16} />
+                <span>{modalError}</span>
+              </div>
+            )}
+
             {cameraError && (
               <div className="alert alert-error" style={{ marginBottom: "16px" }}>
                 <AlertCircle size={16} />
@@ -361,112 +373,124 @@ export default function StudentsPage() {
                 />
               </div>
 
+              {cameraMode && (
+                <div className="form-group" style={{ background: "#0b0f19", padding: "14px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", textAlign: "center", marginBottom: "20px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                    <span style={{ fontSize: "0.85rem", fontWeight: 700, color: cameraMode === "primary" ? "var(--accent-indigo)" : "var(--accent-emerald)" }}>
+                      {cameraMode === "primary" ? "Camera: Primary Face Viewfinder" : "Camera: Extra Angle Viewfinder"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={stopCamera}
+                      style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.8rem" }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div style={{ position: "relative", width: "100%", maxHeight: "300px", borderRadius: "var(--radius-sm)", overflow: "hidden", background: "#000" }}>
+                    <video
+                      ref={attachVideo}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ width: "100%", height: "auto", display: "block", objectFit: "cover" }}
+                    />
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: "15%",
+                        border: "2px dashed rgba(255,255,255,0.45)",
+                        borderRadius: "16px",
+                        pointerEvents: "none",
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "14px" }}>
+                    <button
+                      type="button"
+                      onClick={capturePhoto}
+                      className="btn btn-primary"
+                    >
+                      <Camera size={16} />
+                      <span>{cameraMode === "primary" ? "Snap Primary Face" : "Snap Extra Angle"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={stopCamera}
+                      className="btn btn-secondary"
+                    >
+                      Close Camera
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="form-label">
                   Primary Biometric Face Photo {primaryImage && <span style={{ color: "var(--accent-emerald)", fontWeight: 700 }}>(Captured)</span>}
                 </label>
 
-                {cameraActive ? (
-                  <div style={{ background: "#0b0f19", padding: "12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-color)", textAlign: "center" }}>
-                    <div style={{ position: "relative", width: "100%", maxHeight: "320px", borderRadius: "var(--radius-sm)", overflow: "hidden", background: "#000" }}>
-                      <video
-                        ref={attachVideo}
-                        autoPlay
-                        playsInline
-                        muted
-                        style={{ width: "100%", height: "auto", display: "block", objectFit: "cover" }}
-                      />
-                      <div
-                        style={{
-                          position: "absolute",
-                          inset: "15%",
-                          border: "2px dashed rgba(255,255,255,0.45)",
-                          borderRadius: "16px",
-                          pointerEvents: "none",
+                {primaryImage ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "20px",
+                      padding: "16px",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--border-color)",
+                      background: "var(--bg-secondary)",
+                    }}
+                  >
+                    <img
+                      src={primaryImage}
+                      alt="Captured Primary"
+                      style={{
+                        width: "120px",
+                        height: "120px",
+                        borderRadius: "var(--radius-md)",
+                        objectFit: "cover",
+                        border: "3px solid var(--accent-emerald)",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                      }}
+                    />
+                    <div>
+                      <div style={{ fontSize: "0.95rem", color: "var(--accent-emerald)", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
+                        <Check size={16} /> Primary Face Captured
+                      </div>
+                      <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "4px", marginBottom: "12px" }}>
+                        Ready for facial feature extraction.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPrimaryImage("");
+                          startCamera("primary");
                         }}
-                      />
-                    </div>
-                    <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "14px" }}>
-                      <button
-                        type="button"
-                        onClick={() => capturePhoto(true)}
-                        className="btn btn-primary"
+                        className="btn btn-secondary btn-sm"
                       >
-                        <Camera size={16} />
-                        <span>Snap Primary Photo</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={stopCamera}
-                        className="btn btn-secondary"
-                      >
-                        Close Camera
+                        <RotateCcw size={14} />
+                        <span>Retake Primary Photo</span>
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    {primaryImage ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "20px",
-                          padding: "16px",
-                          borderRadius: "var(--radius-md)",
-                          border: "1px solid var(--border-color)",
-                          background: "var(--bg-secondary)",
-                        }}
-                      >
-                        <img
-                          src={primaryImage}
-                          alt="Captured Primary"
-                          style={{
-                            width: "120px",
-                            height: "120px",
-                            borderRadius: "var(--radius-md)",
-                            objectFit: "cover",
-                            border: "3px solid var(--accent-emerald)",
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                          }}
-                        />
-                        <div>
-                          <div style={{ fontSize: "0.95rem", color: "var(--accent-emerald)", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
-                            <Check size={16} /> Photo Captured
-                          </div>
-                          <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "4px", marginBottom: "12px" }}>
-                            Live camera frame ready for facial feature extraction.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPrimaryImage("");
-                              startCamera();
-                            }}
-                            className="btn btn-secondary btn-sm"
-                          >
-                            <RotateCcw size={14} />
-                            <span>Retake Photo</span>
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={startCamera}
-                        className="btn btn-primary"
-                        style={{ width: "100%", justifyContent: "center", padding: "14px" }}
-                      >
-                        <Camera size={18} />
-                        <span>Start Camera to Snap Face</span>
-                      </button>
-                    )}
-                  </div>
+                  !cameraMode && (
+                    <button
+                      type="button"
+                      onClick={() => startCamera("primary")}
+                      className="btn btn-primary"
+                      style={{ width: "100%", justifyContent: "center", padding: "14px" }}
+                    >
+                      <Camera size={18} />
+                      <span>Start Camera to Snap Face</span>
+                    </button>
+                  )
                 )}
               </div>
 
               {primaryImage && (
-                <div className="form-group" style={{ marginTop: "16px" }}>
+                <div className="form-group" style={{ marginTop: "20px" }}>
                   <label className="form-label">
                     Optional Angle Photos ({extraImages.length}/2)
                   </label>
@@ -476,7 +500,7 @@ export default function StudentsPage() {
                         <img
                           src={img}
                           alt="Angle"
-                          style={{ width: "72px", height: "72px", borderRadius: "var(--radius-sm)", objectFit: "cover", border: "1px solid var(--border-color)" }}
+                          style={{ width: "76px", height: "76px", borderRadius: "var(--radius-sm)", objectFit: "cover", border: "2px solid var(--border-color)" }}
                         />
                         <button
                           type="button"
@@ -502,24 +526,14 @@ export default function StudentsPage() {
                         </button>
                       </div>
                     ))}
-                    {extraImages.length < 2 && !cameraActive && (
+                    {extraImages.length < 2 && cameraMode !== "extra" && (
                       <button
                         type="button"
-                        onClick={startCamera}
+                        onClick={() => startCamera("extra")}
                         className="btn btn-secondary btn-sm"
                       >
                         <Camera size={14} />
-                        <span>Snap Angle Photo</span>
-                      </button>
-                    )}
-                    {extraImages.length < 2 && cameraActive && (
-                      <button
-                        type="button"
-                        onClick={() => capturePhoto(false)}
-                        className="btn btn-secondary btn-sm"
-                      >
-                        <Camera size={14} />
-                        <span>Capture Extra Angle</span>
+                        <span>+ Snap Angle Photo</span>
                       </button>
                     )}
                   </div>
