@@ -8,6 +8,7 @@ from app.config import settings
 from app.database import (
     create_session,
     delete_attendance_record_by_usn,
+    delete_session,
     end_session,
     find_nearest_student_face,
     get_session_by_id,
@@ -137,6 +138,30 @@ async def end_active_session(
             "is_active": updated["is_active"],
             "ended_at": updated["ended_at"].isoformat() if updated.get("ended_at") else None,
         },
+    }
+
+@router.delete("/{session_id}", status_code=status.HTTP_200_OK)
+async def delete_existing_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    session = await get_authorized_session(session_id, current_user)
+    if current_user.get("role") != "admin" and str(session.get("created_by")) != str(current_user.get("id")):
+        raise AppError(
+            code="UNAUTHORIZED",
+            message="Only administrators or the session creator can delete this session",
+            status_code=403,
+        )
+    success = await delete_session(session["id"])
+    if not success:
+        raise AppError(
+            code="SESSION_NOT_FOUND",
+            message="Session not found",
+            status_code=404,
+        )
+    return {
+        "status": "SUCCESS",
+        "message": "Session deleted successfully",
     }
 
 @router.post("/{session_id}/mark")

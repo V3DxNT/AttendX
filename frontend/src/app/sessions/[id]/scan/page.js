@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../context/AuthContext";
 import { apiFetch } from "../../../../lib/api";
-import { ArrowLeft, CheckCircle2, AlertTriangle, UserCheck, VideoOff, Users, Scan } from "lucide-react";
+import { ArrowLeft, CheckCircle2, AlertTriangle, UserCheck, VideoOff, Users, Scan, Play, Pause, Sliders } from "lucide-react";
 
 export default function LiveScannerPage() {
   const params = useParams();
@@ -17,9 +17,12 @@ export default function LiveScannerPage() {
   const streamRef = useRef(null);
   const inFlightRef = useRef(false);
   const timerRef = useRef(null);
+  const cooldownUntilRef = useRef(0);
 
   const [session, setSession] = useState(null);
   const [cameraError, setCameraError] = useState("");
+  const [isPaused, setIsPaused] = useState(false);
+  const [scanInterval, setScanInterval] = useState(2000);
   const [scanStatus, setScanStatus] = useState({
     state: "idle",
     message: "Point camera at one student at a time",
@@ -116,7 +119,9 @@ export default function LiveScannerPage() {
   };
 
   const sendScan = async () => {
-    if (inFlightRef.current || !streamRef.current) return;
+    if (isPaused || inFlightRef.current || !streamRef.current) return;
+    if (Date.now() < cooldownUntilRef.current) return;
+
     const frameBase64 = captureFrame();
     if (!frameBase64) return;
 
@@ -127,6 +132,8 @@ export default function LiveScannerPage() {
         method: "POST",
         body: JSON.stringify({ image_base64: frameBase64 }),
       });
+
+      cooldownUntilRef.current = Date.now() + 2500;
 
       setScanStatus({
         state: "success",
@@ -146,6 +153,7 @@ export default function LiveScannerPage() {
       ]);
     } catch (err) {
       if (err.code === "ALREADY_MARKED") {
+        cooldownUntilRef.current = Date.now() + 2000;
         setScanStatus({
           state: "warning",
           message: `Already Marked: ${err.data?.student?.full_name || "Student"}`,
@@ -155,7 +163,7 @@ export default function LiveScannerPage() {
       } else if (err.code === "UNKNOWN_FACE") {
         setScanStatus({
           state: "error",
-          message: "Unrecognized face. Not found in enrolled database.",
+          message: "Unrecognized face. Not enrolled in directory.",
           student: null,
           distance: null,
         });
@@ -209,14 +217,20 @@ export default function LiveScannerPage() {
   };
 
   useEffect(() => {
-    if (session) {
+    if (session && !isPaused) {
       startCamera();
-      timerRef.current = setInterval(sendScan, 1500);
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(sendScan, scanInterval);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     }
     return () => {
       stopCamera();
     };
-  }, [session]);
+  }, [session, isPaused, scanInterval]);
 
   if (authLoading || !user) {
     return null;
@@ -224,17 +238,17 @@ export default function LiveScannerPage() {
 
   return (
     <div className="container" style={{ padding: "32px 24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
         <Link href={`/sessions/${sessionId}`} style={{ color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.9rem" }}>
           <ArrowLeft size={16} /> Exit Scanner
         </Link>
         {session && (
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
             <span style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
               {session.subject_name} ({session.subject_code})
             </span>
-            <div className="status-badge status-active">
-              <Scan size={14} /> Live Scanner
+            <div className={`status-badge ${isPaused ? "status-ended" : "status-active"}`}>
+              <Scan size={14} /> {isPaused ? "Scanner Paused" : "Live Scanner"}
             </div>
             <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--accent-emerald)" }}>
               {totalMarked} Marked Present
@@ -261,15 +275,42 @@ export default function LiveScannerPage() {
                 <div className="scanner-overlay">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ background: "rgba(0,0,0,0.6)", padding: "4px 10px", borderRadius: "9999px", fontSize: "0.75rem", fontFamily: "var(--font-mono)" }}>
-                      FPS: ~0.7 (1.5s interval)
+                      Interval: {scanInterval / 1000}s {isPaused && "(Paused)"}
                     </span>
                     <span style={{ background: "rgba(0,0,0,0.6)", padding: "4px 10px", borderRadius: "9999px", fontSize: "0.75rem" }}>
-                      Threshold: 0.40
+                      Anti-Throttle: Active
                     </span>
                   </div>
                 </div>
               </>
             )}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", flexWrap: "wrap", gap: "10px" }}>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => setIsPaused(!isPaused)}
+                className={`btn btn-sm ${isPaused ? "btn-primary" : "btn-secondary"}`}
+              >
+                {isPaused ? <Play size={14} /> : <Pause size={14} />}
+                <span>{isPaused ? "Resume Scanner" : "Pause Scanner"}</span>
+              </button>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+              <Sliders size={14} />
+              <span>Pace:</span>
+              <select
+                className="form-input"
+                style={{ height: "32px", fontSize: "0.8rem", padding: "0 8px" }}
+                value={scanInterval}
+                onChange={(e) => setScanInterval(Number(e.target.value))}
+              >
+                <option value={1500}>1.5s (Fast)</option>
+                <option value={2000}>2.0s (Balanced)</option>
+                <option value={3000}>3.0s (Eco/Low CPU)</option>
+              </select>
+            </div>
           </div>
 
           <div
@@ -319,20 +360,19 @@ export default function LiveScannerPage() {
                 ) : scanStatus.state === "warning" ? (
                   <AlertTriangle size={24} style={{ color: "var(--accent-amber)" }} />
                 ) : (
-                  <UserCheck size={24} style={{ color: "var(--text-muted)" }} />
+                  <Scan size={24} style={{ color: "var(--text-muted)" }} />
                 )}
               </div>
             )}
-
             <div>
-              <div style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "2px" }}>
+              <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>
                 {scanStatus.message}
               </div>
               {scanStatus.student && (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", display: "flex", gap: "12px" }}>
-                  <span>USN: <strong style={{ color: "var(--text-primary)" }}>{scanStatus.student.usn}</strong></span>
+                <div style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "2px" }}>
+                  USN: <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{scanStatus.student.usn}</span>
                   {scanStatus.distance !== null && (
-                    <span>Distance: <strong style={{ color: "var(--accent-emerald)" }}>{scanStatus.distance}</strong></span>
+                    <span> • Confidence: {((1 - scanStatus.distance) * 100).toFixed(1)}%</span>
                   )}
                 </div>
               )}
@@ -340,44 +380,45 @@ export default function LiveScannerPage() {
           </div>
         </div>
 
-        <div className="card" style={{ height: "100%", maxHeight: "560px", overflowY: "auto" }}>
+        <div className="card">
           <div className="card-header" style={{ marginBottom: "16px" }}>
             <h3 style={{ fontSize: "1.05rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px" }}>
-              <Users size={16} /> Recent Scans ({recentScans.length})
+              <UserCheck size={18} style={{ color: "var(--accent-emerald)" }} />
+              Live Activity Log
             </h3>
           </div>
 
           {recentScans.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 10px", color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-              Identified student faces will appear here live.
+            <div style={{ textAlign: "center", padding: "40px 10px", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+              No students scanned in this session yet.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {recentScans.map((s, idx) => (
+              {recentScans.map((scan, idx) => (
                 <div
-                  key={idx}
+                  key={`${scan.usn}-${idx}`}
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "12px",
-                    padding: "10px",
+                    gap: "10px",
+                    padding: "8px 10px",
                     background: "var(--bg-secondary)",
-                    borderRadius: "var(--radius-md)",
+                    borderRadius: "var(--radius-sm)",
                     border: "1px solid var(--border-subtle)",
                   }}
                 >
-                  <img src={s.thumbnail} alt={s.full_name} className="avatar-sm" style={{ width: "36px", height: "36px" }} />
+                  <img src={scan.thumbnail} alt={scan.full_name} className="avatar-sm" style={{ width: "36px", height: "36px" }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: "0.875rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {s.full_name}
+                    <div style={{ fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {scan.full_name}
                     </div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
-                      {s.usn}
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--accent-indigo)" }}>
+                      {scan.usn}
                     </div>
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--accent-emerald)", fontWeight: 600 }}>
-                    {s.timestamp}
-                  </div>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    {scan.timestamp}
+                  </span>
                 </div>
               ))}
             </div>

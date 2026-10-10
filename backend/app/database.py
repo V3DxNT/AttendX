@@ -426,11 +426,21 @@ async def get_session_dashboard(session_id: UUID) -> Optional[dict]:
         "subject_name": session["subject_name"],
         "subject_code": session["subject_code"],
         "session_date": str(session["session_date"]),
+        "started_at": session["started_at"].isoformat() if session.get("started_at") else None,
+        "ended_at": session["ended_at"].isoformat() if session.get("ended_at") else None,
         "is_active": session["is_active"],
         "total_present": len(attendees),
         "total_enrolled": total_enrolled,
         "attendees": attendees,
     }
+
+async def delete_session(session_id: UUID) -> bool:
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "DELETE FROM attendance_sessions WHERE id = $1 RETURNING id",
+        session_id,
+    )
+    return row is not None
 
 async def get_session_export_records(session_id: UUID) -> List[dict]:
     pool = get_pool()

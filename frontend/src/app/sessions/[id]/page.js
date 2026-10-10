@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../context/AuthContext";
 import { apiFetch } from "../../../lib/api";
-import { Camera, Download, Trash2, Plus, AlertCircle, CheckCircle2, StopCircle, ArrowLeft } from "lucide-react";
+import { Camera, Download, Trash2, Plus, AlertCircle, CheckCircle2, StopCircle, ArrowLeft, Clock, Calendar, ArrowUpDown, Search } from "lucide-react";
 
 export default function SessionDetailPage() {
   const params = useParams();
@@ -19,6 +19,8 @@ export default function SessionDetailPage() {
   const [success, setSuccess] = useState("");
   const [manualUsn, setManualUsn] = useState("");
   const [submittingManual, setSubmittingManual] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("time_desc");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -55,6 +57,19 @@ export default function SessionDetailPage() {
       fetchDashboard();
     } catch (err) {
       setError(err.message || "Failed to end session.");
+    }
+  };
+
+  const handleDeleteSession = async () => {
+    if (!confirm(`Are you sure you want to delete session "${dashboard?.subject_name}"? All its attendance records will be permanently removed.`)) {
+      return;
+    }
+
+    try {
+      await apiFetch(`/api/v1/sessions/${sessionId}`, { method: "DELETE" });
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err.message || "Failed to delete session.");
     }
   };
 
@@ -124,6 +139,39 @@ export default function SessionDetailPage() {
     }
   };
 
+  const formatTime = (ts) => {
+    if (!ts) return null;
+    try {
+      return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    } catch {
+      return null;
+    }
+  };
+
+  const processedAttendees = useMemo(() => {
+    if (!dashboard || !dashboard.attendees) return [];
+    let list = [...dashboard.attendees];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((a) => a.usn.toLowerCase().includes(q) || a.full_name.toLowerCase().includes(q));
+    }
+
+    if (sortBy === "usn_asc") {
+      list.sort((a, b) => a.usn.localeCompare(b.usn));
+    } else if (sortBy === "usn_desc") {
+      list.sort((a, b) => b.usn.localeCompare(a.usn));
+    } else if (sortBy === "name_asc") {
+      list.sort((a, b) => a.full_name.localeCompare(b.full_name));
+    } else if (sortBy === "time_asc") {
+      list.sort((a, b) => new Date(a.marked_at).getTime() - new Date(b.marked_at).getTime());
+    } else {
+      list.sort((a, b) => new Date(b.marked_at).getTime() - new Date(a.marked_at).getTime());
+    }
+
+    return list;
+  }, [dashboard, searchQuery, sortBy]);
+
   if (authLoading || !user) {
     return null;
   }
@@ -131,6 +179,8 @@ export default function SessionDetailPage() {
   const attendancePercent = dashboard && dashboard.total_enrolled > 0
     ? Math.round((dashboard.total_present / dashboard.total_enrolled) * 100)
     : 0;
+
+  const isAdmin = user.role === "admin";
 
   return (
     <div className="container" style={{ padding: "40px 24px" }}>
@@ -163,24 +213,38 @@ export default function SessionDetailPage() {
           <div className="card" style={{ marginBottom: "32px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "20px" }}>
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px", flexWrap: "wrap" }}>
                   <h1 style={{ fontSize: "1.75rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
                     {dashboard.subject_name}
                   </h1>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.9rem", color: "var(--text-secondary)", background: "var(--bg-tertiary)", padding: "4px 8px", borderRadius: "var(--radius-sm)" }}>
                     {dashboard.subject_code}
                   </span>
+                  {dashboard.is_active ? (
+                    <span className="status-badge status-active">
+                      <CheckCircle2 size={12} />
+                      Live Active
+                    </span>
+                  ) : (
+                    <span className="status-badge status-ended">Completed</span>
+                  )}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "16px", color: "var(--text-secondary)", fontSize: "0.9rem" }}>
-                  <span>Session Date: <strong>{dashboard.session_date}</strong></span>
-                  <span>
-                    Status:{" "}
-                    {dashboard.is_active ? (
-                      <span className="status-badge status-active">Active</span>
-                    ) : (
-                      <span className="status-badge status-ended">Ended</span>
-                    )}
-                  </span>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "20px", color: "var(--text-secondary)", fontSize: "0.9rem", flexWrap: "wrap", marginTop: "12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Calendar size={15} style={{ color: "var(--accent-indigo)" }} />
+                    <span>Date: <strong>{dashboard.session_date}</strong></span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Clock size={15} style={{ color: "var(--accent-cyan)" }} />
+                    <span>Start: <strong>{formatTime(dashboard.started_at) || "Not set"}</strong></span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Clock size={15} style={{ color: dashboard.ended_at ? "var(--text-muted)" : "var(--accent-emerald)" }} />
+                    <span>End: <strong>{dashboard.ended_at ? formatTime(dashboard.ended_at) : "In Progress"}</strong></span>
+                  </div>
                 </div>
               </div>
 
@@ -201,6 +265,12 @@ export default function SessionDetailPage() {
                   <Download size={16} />
                   <span>Export CSV</span>
                 </button>
+                {isAdmin && (
+                  <button onClick={handleDeleteSession} className="btn btn-danger" title="Delete this session">
+                    <Trash2 size={16} />
+                    <span>Delete</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -241,15 +311,54 @@ export default function SessionDetailPage() {
           </div>
 
           <div className="card">
-            <div className="card-header">
-              <h2 style={{ fontSize: "1.2rem", fontWeight: 700 }}>
-                Present Attendees ({dashboard.attendees.length})
-              </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "16px" }}>
+              <div>
+                <h2 style={{ fontSize: "1.2rem", fontWeight: 700 }}>
+                  Session Attendees ({dashboard.attendees.length})
+                </h2>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "2px" }}>
+                  Students verified present in this specific lecture
+                </p>
+              </div>
+
+              <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ position: "relative", minWidth: "220px" }}>
+                  <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+                  <input
+                    type="text"
+                    className="form-input"
+                    style={{ paddingLeft: "32px", paddingRight: "10px", fontSize: "0.85rem", height: "36px" }}
+                    placeholder="Search USN or Name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <ArrowUpDown size={14} style={{ color: "var(--text-muted)" }} />
+                  <select
+                    className="form-input"
+                    style={{ fontSize: "0.85rem", height: "36px", padding: "0 10px" }}
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="time_desc">Time (Latest First)</option>
+                    <option value="time_asc">Time (Earliest First)</option>
+                    <option value="usn_asc">USN (Ascending A-Z)</option>
+                    <option value="usn_desc">USN (Descending Z-A)</option>
+                    <option value="name_asc">Name (A-Z)</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             {dashboard.attendees.length === 0 ? (
               <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--text-secondary)" }}>
-                No attendance records yet for this session. Launch the camera scanner to record attendance.
+                No attendance records yet for this session. Launch the live scanner to capture student faces.
+              </div>
+            ) : processedAttendees.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "36px 20px", color: "var(--text-secondary)" }}>
+                No attendees matching "{searchQuery}".
               </div>
             ) : (
               <div className="table-container">
@@ -257,15 +366,42 @@ export default function SessionDetailPage() {
                   <thead>
                     <tr>
                       <th>Biometric</th>
-                      <th>USN</th>
-                      <th>Full Name</th>
-                      <th>Recorded At</th>
+                      <th
+                        onClick={() => setSortBy(sortBy === "usn_asc" ? "usn_desc" : "usn_asc")}
+                        style={{ cursor: "pointer" }}
+                        title="Click to sort by USN"
+                      >
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          <span>USN</span>
+                          <ArrowUpDown size={12} />
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => setSortBy(sortBy === "name_asc" ? "time_desc" : "name_asc")}
+                        style={{ cursor: "pointer" }}
+                        title="Click to sort by Name"
+                      >
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          <span>Full Name</span>
+                          <ArrowUpDown size={12} />
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => setSortBy(sortBy === "time_desc" ? "time_asc" : "time_desc")}
+                        style={{ cursor: "pointer" }}
+                        title="Click to sort by Time"
+                      >
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          <span>Capture Time</span>
+                          <ArrowUpDown size={12} />
+                        </div>
+                      </th>
                       <th>Method</th>
                       <th style={{ textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {dashboard.attendees.map((attendee) => (
+                    {processedAttendees.map((attendee) => (
                       <tr key={attendee.usn}>
                         <td>
                           <img src={attendee.thumbnail} alt={attendee.full_name} className="avatar-sm" />
@@ -277,9 +413,10 @@ export default function SessionDetailPage() {
                         </td>
                         <td style={{ fontWeight: 600 }}>{attendee.full_name}</td>
                         <td>
-                          <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                            {new Date(attendee.marked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                          </span>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                            <Clock size={13} style={{ color: "var(--accent-cyan)" }} />
+                            <span>{formatTime(attendee.marked_at)}</span>
+                          </div>
                         </td>
                         <td>
                           <span className={`status-badge ${attendee.method === "face" ? "status-active" : "status-ended"}`}>

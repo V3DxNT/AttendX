@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { apiFetch } from "../../lib/api";
-import { Plus, Camera, BarChart3, AlertCircle, X, CheckCircle2, Calendar } from "lucide-react";
+import { Plus, Camera, BarChart3, AlertCircle, X, CheckCircle2, Calendar, Clock, Trash2 } from "lucide-react";
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [subjectCode, setSubjectCode] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export default function DashboardPage() {
   const fetchSessions = async () => {
     try {
       setLoading(true);
-      const res = await apiFetch("/api/v1/sessions?limit=50");
+      const res = await apiFetch("/api/v1/sessions?limit=100");
       setSessions(res.items || []);
     } catch (err) {
       setError(err.message || "Failed to load sessions.");
@@ -68,15 +69,75 @@ export default function DashboardPage() {
     }
   };
 
-  const filteredSessions = sessions.filter((s) => {
-    if (activeFilter === "active") return s.is_active;
-    if (activeFilter === "ended") return !s.is_active;
-    return true;
-  });
+  const handleDeleteSession = async (sessionId, subject) => {
+    if (!confirm(`Are you sure you want to delete "${subject}" session? All its recorded attendance data will be permanently removed.`)) {
+      return;
+    }
+
+    try {
+      await apiFetch(`/api/v1/sessions/${sessionId}`, { method: "DELETE" });
+      setSuccess(`Session "${subject}" deleted successfully.`);
+      fetchSessions();
+    } catch (err) {
+      setError(err.message || "Failed to delete session.");
+    }
+  };
+
+  const filteredSessions = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    return sessions.filter((s) => {
+      const sDate = s.session_date || (s.started_at ? s.started_at.slice(0, 10) : "");
+      if (activeFilter === "today") return sDate === todayStr;
+      if (activeFilter === "week") {
+        const sTime = s.started_at ? new Date(s.started_at) : new Date(sDate);
+        return sTime >= oneWeekAgo;
+      }
+      if (activeFilter === "older") {
+        const sTime = s.started_at ? new Date(s.started_at) : new Date(sDate);
+        return sTime < oneWeekAgo;
+      }
+      if (activeFilter === "active") return s.is_active;
+      if (activeFilter === "ended") return !s.is_active;
+      return true;
+    });
+  }, [sessions, activeFilter]);
+
+  const groupedSessions = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const groups = {};
+    filteredSessions.forEach((s) => {
+      const d = s.session_date || (s.started_at ? s.started_at.slice(0, 10) : "Other");
+      let label = d;
+      if (d === todayStr) label = "Today (" + d + ")";
+      else if (d === yesterday) label = "Yesterday (" + d + ")";
+      else label = "Date: " + d;
+
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(s);
+    });
+
+    return Object.entries(groups).map(([label, items]) => ({ label, items }));
+  }, [filteredSessions]);
+
+  const formatTime = (ts) => {
+    if (!ts) return null;
+    try {
+      return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return null;
+    }
+  };
 
   if (authLoading || !user) {
     return null;
   }
+
+  const isAdmin = user.role === "admin";
 
   return (
     <div className="container" style={{ padding: "40px 24px" }}>
@@ -103,13 +164,34 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: "8px", marginBottom: "24px" }}>
+      {success && (
+        <div className="alert alert-success">
+          <CheckCircle2 size={18} />
+          <span>{success}</span>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: "8px", marginBottom: "28px", flexWrap: "wrap" }}>
         <button
           onClick={() => setActiveFilter("all")}
           className={`btn btn-sm ${activeFilter === "all" ? "btn-secondary" : ""}`}
           style={{ background: activeFilter === "all" ? "var(--border-strong)" : "transparent" }}
         >
           All ({sessions.length})
+        </button>
+        <button
+          onClick={() => setActiveFilter("today")}
+          className={`btn btn-sm ${activeFilter === "today" ? "btn-secondary" : ""}`}
+          style={{ background: activeFilter === "today" ? "var(--border-strong)" : "transparent" }}
+        >
+          Today
+        </button>
+        <button
+          onClick={() => setActiveFilter("week")}
+          className={`btn btn-sm ${activeFilter === "week" ? "btn-secondary" : ""}`}
+          style={{ background: activeFilter === "week" ? "var(--border-strong)" : "transparent" }}
+        >
+          Past 7 Days
         </button>
         <button
           onClick={() => setActiveFilter("active")}
@@ -146,68 +228,109 @@ export default function DashboardPage() {
           </button>
         </div>
       ) : (
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Subject</th>
-                <th>Code</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Present</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSessions.map((session) => (
-                <tr key={session.id}>
-                  <td style={{ fontWeight: 600 }}>{session.subject_name}</td>
-                  <td>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                      {session.subject_code}
-                    </span>
-                  </td>
-                  <td>{session.session_date}</td>
-                  <td>
-                    {session.is_active ? (
-                      <span className="status-badge status-active">
-                        <CheckCircle2 size={12} />
-                        Active
-                      </span>
-                    ) : (
-                      <span className="status-badge status-ended">Ended</span>
-                    )}
-                  </td>
-                  <td>
-                    <span style={{ fontWeight: 700, fontSize: "1rem" }}>{session.total_present}</span>
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    <div style={{ display: "inline-flex", gap: "8px" }}>
-                      {session.is_active && (
-                        <Link href={`/sessions/${session.id}/scan`} className="btn btn-primary btn-sm">
-                          <Camera size={14} />
-                          <span>Scan</span>
-                        </Link>
-                      )}
-                      <Link href={`/sessions/${session.id}`} className="btn btn-secondary btn-sm">
-                        <BarChart3 size={14} />
-                        <span>Dashboard</span>
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
+          {groupedSessions.map(({ label, items }) => (
+            <div key={label}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", color: "var(--text-secondary)", fontSize: "0.9rem", fontWeight: 700 }}>
+                <Calendar size={16} style={{ color: "var(--accent-indigo)" }} />
+                <span>{label}</span>
+                <span style={{ fontSize: "0.8rem", background: "var(--bg-tertiary)", padding: "2px 8px", borderRadius: "9999px" }}>
+                  {items.length} {items.length === 1 ? "session" : "sessions"}
+                </span>
+              </div>
+
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Subject</th>
+                      <th>Code</th>
+                      <th>Timeline & Schedule</th>
+                      <th>Status</th>
+                      <th>Turnout</th>
+                      <th style={{ textAlign: "right" }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((session) => (
+                      <tr key={session.id}>
+                        <td style={{ fontWeight: 600 }}>
+                          <Link href={`/sessions/${session.id}`} style={{ color: "inherit", textDecoration: "none" }}>
+                            {session.subject_name}
+                          </Link>
+                        </td>
+                        <td>
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                            {session.subject_code}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "0.85rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-secondary)" }}>
+                              <Clock size={13} />
+                              <span>Start: {formatTime(session.started_at) || "Not set"}</span>
+                              {session.ended_at && <span>• End: {formatTime(session.ended_at)}</span>}
+                            </div>
+                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                              Date: {session.session_date}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          {session.is_active ? (
+                            <span className="status-badge status-active">
+                              <CheckCircle2 size={12} />
+                              Active
+                            </span>
+                          ) : (
+                            <span className="status-badge status-ended">Ended</span>
+                          )}
+                        </td>
+                        <td>
+                          <span style={{ fontWeight: 700, fontSize: "1rem", color: "var(--accent-indigo)" }}>
+                            {session.total_present} Present
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
+                            {session.is_active && (
+                              <Link href={`/sessions/${session.id}/scan`} className="btn btn-primary btn-sm">
+                                <Camera size={14} />
+                                <span>Scan</span>
+                              </Link>
+                            )}
+                            <Link href={`/sessions/${session.id}`} className="btn btn-secondary btn-sm">
+                              <BarChart3 size={14} />
+                              <span>Dashboard</span>
+                            </Link>
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleDeleteSession(session.id, session.subject_name)}
+                                className="btn btn-danger btn-sm"
+                                title="Delete session"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
       {showModal && (
         <div className="modal-backdrop">
           <div className="modal">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-              <h2 style={{ fontSize: "1.3rem", fontWeight: 800 }}>Create New Session</h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "1.3rem", fontWeight: 800 }}>Create Attendance Session</h2>
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
                 className="btn btn-sm"
                 style={{ background: "transparent", color: "var(--text-secondary)", border: "none" }}
@@ -225,7 +348,7 @@ export default function DashboardPage() {
                   className="form-input"
                   value={subjectName}
                   onChange={(e) => setSubjectName(e.target.value)}
-                  placeholder="Distributed Systems"
+                  placeholder="Computer Networks"
                 />
               </div>
 
@@ -235,13 +358,14 @@ export default function DashboardPage() {
                   type="text"
                   required
                   className="form-input"
+                  style={{ textTransform: "uppercase", fontFamily: "var(--font-mono)" }}
                   value={subjectCode}
-                  onChange={(e) => setSubjectCode(e.target.value)}
-                  placeholder="CS601"
+                  onChange={(e) => setSubjectCode(e.target.value.toUpperCase())}
+                  placeholder="CS501"
                 />
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "32px" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "28px" }}>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
@@ -251,7 +375,7 @@ export default function DashboardPage() {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={creating}>
-                  {creating ? "Creating..." : "Start Session & Open Scanner"}
+                  {creating ? "Creating..." : "Start & Open Scanner"}
                 </button>
               </div>
             </form>
