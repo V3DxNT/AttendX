@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { apiFetch } from "../../lib/api";
+import ConfirmModal from "../../components/ConfirmModal";
 import { Plus, Search, Trash2, Camera, AlertCircle, X, Check, RotateCcw } from "lucide-react";
 
 export default function StudentsPage() {
   const { user, loading: authLoading } = useAuth();
+  const toast = useToast();
   const router = useRouter();
 
   const [students, setStudents] = useState([]);
@@ -15,15 +18,16 @@ export default function StudentsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [error, setError] = useState("");
   const [modalError, setModalError] = useState("");
-  const [success, setSuccess] = useState("");
 
   const [usn, setUsn] = useState("");
   const [fullName, setFullName] = useState("");
   const [primaryImage, setPrimaryImage] = useState("");
   const [extraImages, setExtraImages] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [cameraMode, setCameraMode] = useState(null);
   const [cameraError, setCameraError] = useState("");
@@ -44,7 +48,7 @@ export default function StudentsPage() {
       setStudents(res.items || []);
       setTotal(res.total || 0);
     } catch (err) {
-      setError(err.message || "Failed to load students.");
+      toast.error(err.message || "Failed to load students.");
     } finally {
       setLoading(false);
     }
@@ -120,9 +124,11 @@ export default function StudentsPage() {
 
     if (cameraMode === "primary") {
       setPrimaryImage(b64);
+      toast.success("Primary face photo captured!");
     } else if (cameraMode === "extra") {
       if (extraImages.length < 2) {
         setExtraImages((prev) => [...prev, b64]);
+        toast.success("Additional angle photo added!");
       }
     }
     stopCamera();
@@ -131,9 +137,7 @@ export default function StudentsPage() {
 
   const openEnrollModal = () => {
     setShowModal(true);
-    setError("");
     setModalError("");
-    setSuccess("");
     setCameraError("");
     setUsn("");
     setFullName("");
@@ -158,7 +162,6 @@ export default function StudentsPage() {
 
     setSubmitting(true);
     setModalError("");
-    setError("");
 
     try {
       await apiFetch("/api/v1/students/register", {
@@ -171,7 +174,7 @@ export default function StudentsPage() {
         }),
       });
 
-      setSuccess(`Student ${usn.toUpperCase()} enrolled successfully!`);
+      toast.success(`Student ${usn.toUpperCase()} enrolled successfully!`);
       closeEnrollModal();
       fetchStudents();
     } catch (err) {
@@ -195,17 +198,19 @@ export default function StudentsPage() {
     }
   };
 
-  const handleDeleteStudent = async (targetUsn) => {
-    if (!confirm(`Are you sure you want to delete ${targetUsn}? This will remove all biometrics and attendance records.`)) {
-      return;
-    }
+  const confirmDeleteStudent = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
 
     try {
-      await apiFetch(`/api/v1/students/${targetUsn}`, { method: "DELETE" });
-      setSuccess(`Student ${targetUsn} deleted successfully.`);
+      await apiFetch(`/api/v1/students/${deleteTarget}`, { method: "DELETE" });
+      toast.success(`Student ${deleteTarget} deleted successfully.`);
+      setDeleteTarget(null);
       fetchStudents();
     } catch (err) {
-      setError(err.message || "Failed to delete student.");
+      toast.error(err.message || "Failed to delete student.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -230,20 +235,6 @@ export default function StudentsPage() {
           <span>Enroll Student</span>
         </button>
       </div>
-
-      {error && (
-        <div className="alert alert-error">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {success && (
-        <div className="alert alert-success">
-          <Check size={18} />
-          <span>{success}</span>
-        </div>
-      )}
 
       <div style={{ marginBottom: "24px", position: "relative", maxWidth: "420px" }}>
         <Search size={18} style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
@@ -298,7 +289,7 @@ export default function StudentsPage() {
                   {user.role === "admin" && (
                     <td style={{ textAlign: "right" }}>
                       <button
-                        onClick={() => handleDeleteStudent(s.usn)}
+                        onClick={() => setDeleteTarget(s.usn)}
                         className="btn btn-danger btn-sm"
                         title="Delete student record"
                       >
@@ -561,6 +552,17 @@ export default function StudentsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Student Biometrics"
+        message={`Are you sure you want to permanently delete student ${deleteTarget}? This will purge all associated facial biometrics and attendance logs.`}
+        confirmText="Delete Student"
+        cancelText="Keep Record"
+        loading={deleting}
+        onConfirm={confirmDeleteStudent}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

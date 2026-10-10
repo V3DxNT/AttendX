@@ -4,11 +4,14 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { apiFetch } from "../../lib/api";
+import ConfirmModal from "../../components/ConfirmModal";
 import { Plus, Camera, BarChart3, AlertCircle, X, CheckCircle2, Calendar, Clock, Trash2 } from "lucide-react";
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
+  const toast = useToast();
   const router = useRouter();
 
   const [sessions, setSessions] = useState([]);
@@ -17,9 +20,11 @@ export default function DashboardPage() {
   const [subjectName, setSubjectName] = useState("");
   const [subjectCode, setSubjectCode] = useState("");
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [modalError, setModalError] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -33,7 +38,7 @@ export default function DashboardPage() {
       const res = await apiFetch("/api/v1/sessions?limit=100");
       setSessions(res.items || []);
     } catch (err) {
-      setError(err.message || "Failed to load sessions.");
+      toast.error(err.message || "Failed to load sessions.");
     } finally {
       setLoading(false);
     }
@@ -48,7 +53,7 @@ export default function DashboardPage() {
   const handleCreateSession = async (e) => {
     e.preventDefault();
     setCreating(true);
-    setError("");
+    setModalError("");
 
     try {
       const res = await apiFetch("/api/v1/sessions/create", {
@@ -61,25 +66,28 @@ export default function DashboardPage() {
       setShowModal(false);
       setSubjectName("");
       setSubjectCode("");
+      toast.success("Session created! Launching scanner...");
       router.push(`/sessions/${res.session_id}/scan`);
     } catch (err) {
-      setError(err.message || "Failed to create session.");
+      setModalError(err.message || "Failed to create session.");
     } finally {
       setCreating(false);
     }
   };
 
-  const handleDeleteSession = async (sessionId, subject) => {
-    if (!confirm(`Are you sure you want to delete "${subject}" session? All its recorded attendance data will be permanently removed.`)) {
-      return;
-    }
+  const confirmDeleteSession = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
 
     try {
-      await apiFetch(`/api/v1/sessions/${sessionId}`, { method: "DELETE" });
-      setSuccess(`Session "${subject}" deleted successfully.`);
+      await apiFetch(`/api/v1/sessions/${deleteTarget.id}`, { method: "DELETE" });
+      toast.success(`Session "${deleteTarget.subject}" deleted successfully.`);
+      setDeleteTarget(null);
       fetchSessions();
     } catch (err) {
-      setError(err.message || "Failed to delete session.");
+      toast.error(err.message || "Failed to delete session.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -156,20 +164,6 @@ export default function DashboardPage() {
           <span>New Session</span>
         </button>
       </div>
-
-      {error && (
-        <div className="alert alert-error">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {success && (
-        <div className="alert alert-success">
-          <CheckCircle2 size={18} />
-          <span>{success}</span>
-        </div>
-      )}
 
       <div style={{ display: "flex", gap: "8px", marginBottom: "28px", flexWrap: "wrap" }}>
         <button
@@ -305,7 +299,7 @@ export default function DashboardPage() {
                             </Link>
                             {isAdmin && (
                               <button
-                                onClick={() => handleDeleteSession(session.id, session.subject_name)}
+                                onClick={() => setDeleteTarget({ id: session.id, subject: session.subject_name })}
                                 className="btn btn-danger btn-sm"
                                 title="Delete session"
                               >
@@ -338,6 +332,13 @@ export default function DashboardPage() {
                 <X size={20} />
               </button>
             </div>
+
+            {modalError && (
+              <div className="alert alert-error" style={{ marginBottom: "16px" }}>
+                <AlertCircle size={16} />
+                <span>{modalError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleCreateSession}>
               <div className="form-group">
@@ -382,6 +383,17 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Attendance Session"
+        message={`Are you sure you want to delete "${deleteTarget?.subject}"? All recorded attendance data for this session will be permanently deleted.`}
+        confirmText="Delete Session"
+        cancelText="Cancel"
+        loading={deleting}
+        onConfirm={confirmDeleteSession}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

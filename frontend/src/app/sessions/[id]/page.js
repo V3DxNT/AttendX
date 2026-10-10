@@ -4,23 +4,35 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
 import { apiFetch } from "../../../lib/api";
+import ConfirmModal from "../../../components/ConfirmModal";
 import { Camera, Download, Trash2, Plus, AlertCircle, CheckCircle2, StopCircle, ArrowLeft, Clock, Calendar, ArrowUpDown, Search } from "lucide-react";
 
 export default function SessionDetailPage() {
   const params = useParams();
   const sessionId = params.id;
   const { user, loading: authLoading } = useAuth();
+  const toast = useToast();
   const router = useRouter();
 
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [manualUsn, setManualUsn] = useState("");
   const [submittingManual, setSubmittingManual] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("time_desc");
+
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    type: "",
+    title: "",
+    message: "",
+    confirmText: "Confirm",
+    danger: true,
+    targetData: null,
+  });
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -34,7 +46,7 @@ export default function SessionDetailPage() {
       const res = await apiFetch(`/api/v1/sessions/${sessionId}/dashboard`);
       setDashboard(res);
     } catch (err) {
-      setError(err.message || "Failed to load session details.");
+      toast.error(err.message || "Failed to load session details.");
     } finally {
       setLoading(false);
     }
@@ -46,30 +58,68 @@ export default function SessionDetailPage() {
     }
   }, [user, sessionId]);
 
-  const handleEndSession = async () => {
-    if (!confirm("Are you sure you want to end this attendance session? The live scanner will be closed.")) {
-      return;
-    }
-
-    try {
-      await apiFetch(`/api/v1/sessions/${sessionId}/end`, { method: "POST" });
-      setSuccess("Session ended successfully.");
-      fetchDashboard();
-    } catch (err) {
-      setError(err.message || "Failed to end session.");
-    }
+  const requestEndSession = () => {
+    setConfirmModal({
+      isOpen: true,
+      type: "end",
+      title: "End Attendance Session",
+      message: "Are you sure you want to end this attendance session? The live camera scanner will be closed.",
+      confirmText: "End Session",
+      danger: false,
+      targetData: null,
+    });
   };
 
-  const handleDeleteSession = async () => {
-    if (!confirm(`Are you sure you want to delete session "${dashboard?.subject_name}"? All its attendance records will be permanently removed.`)) {
-      return;
-    }
+  const requestDeleteSession = () => {
+    setConfirmModal({
+      isOpen: true,
+      type: "delete",
+      title: "Delete Attendance Session",
+      message: `Are you sure you want to delete session "${dashboard?.subject_name}"? All its attendance records will be permanently removed.`,
+      confirmText: "Delete Session",
+      danger: true,
+      targetData: null,
+    });
+  };
 
+  const requestRemoveRecord = (usn) => {
+    setConfirmModal({
+      isOpen: true,
+      type: "remove_record",
+      title: "Remove Attendance Record",
+      message: `Remove verified attendance record for student ${usn}?`,
+      confirmText: "Remove Record",
+      danger: true,
+      targetData: usn,
+    });
+  };
+
+  const handleModalConfirm = async () => {
+    setActionLoading(true);
     try {
-      await apiFetch(`/api/v1/sessions/${sessionId}`, { method: "DELETE" });
-      router.push("/dashboard");
+      if (confirmModal.type === "end") {
+        await apiFetch(`/api/v1/sessions/${sessionId}/end`, { method: "POST" });
+        toast.success("Session ended successfully.");
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        fetchDashboard();
+      } else if (confirmModal.type === "delete") {
+        await apiFetch(`/api/v1/sessions/${sessionId}`, { method: "DELETE" });
+        toast.success("Session deleted successfully.");
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        router.push("/dashboard");
+      } else if (confirmModal.type === "remove_record") {
+        const usn = confirmModal.targetData;
+        await apiFetch(`/api/v1/sessions/${sessionId}/records/${usn}`, {
+          method: "DELETE",
+        });
+        toast.success(`Record for ${usn} removed.`);
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        fetchDashboard();
+      }
     } catch (err) {
-      setError(err.message || "Failed to delete session.");
+      toast.error(err.message || "Action failed.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -93,8 +143,9 @@ export default function SessionDetailPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      toast.success("Attendance CSV exported successfully.");
     } catch (err) {
-      setError(err.message || "Export failed.");
+      toast.error(err.message || "Export failed.");
     }
   };
 
@@ -102,40 +153,25 @@ export default function SessionDetailPage() {
     e.preventDefault();
     if (!manualUsn) return;
     setSubmittingManual(true);
-    setError("");
 
     try {
       await apiFetch(`/api/v1/sessions/${sessionId}/records`, {
         method: "POST",
         body: JSON.stringify({ usn: manualUsn.toUpperCase().trim() }),
       });
-      setSuccess(`Attendance marked manually for ${manualUsn.toUpperCase()}.`);
+      toast.success(`Attendance marked manually for ${manualUsn.toUpperCase()}.`);
       setManualUsn("");
       fetchDashboard();
     } catch (err) {
       if (err.code === "ALREADY_MARKED") {
-        setError("Attendance is already marked for this student.");
+        toast.error("Attendance is already marked for this student.");
       } else if (err.code === "STUDENT_NOT_FOUND") {
-        setError(`Student with USN ${manualUsn.toUpperCase()} was not found.`);
+        toast.error(`Student with USN ${manualUsn.toUpperCase()} was not found.`);
       } else {
-        setError(err.message || "Failed to mark attendance.");
+        toast.error(err.message || "Failed to mark attendance.");
       }
     } finally {
       setSubmittingManual(false);
-    }
-  };
-
-  const handleRemoveRecord = async (targetUsn) => {
-    if (!confirm(`Remove attendance record for ${targetUsn}?`)) return;
-
-    try {
-      await apiFetch(`/api/v1/sessions/${sessionId}/records/${targetUsn}`, {
-        method: "DELETE",
-      });
-      setSuccess(`Record for ${targetUsn} removed.`);
-      fetchDashboard();
-    } catch (err) {
-      setError(err.message || "Failed to remove record.");
     }
   };
 
@@ -190,20 +226,6 @@ export default function SessionDetailPage() {
         </Link>
       </div>
 
-      {error && (
-        <div className="alert alert-error">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {success && (
-        <div className="alert alert-success">
-          <CheckCircle2 size={18} />
-          <span>{success}</span>
-        </div>
-      )}
-
       {loading || !dashboard ? (
         <div className="card" style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-secondary)" }}>
           Loading session dashboard...
@@ -255,7 +277,7 @@ export default function SessionDetailPage() {
                       <Camera size={16} />
                       <span>Live Scanner</span>
                     </Link>
-                    <button onClick={handleEndSession} className="btn btn-secondary">
+                    <button onClick={requestEndSession} className="btn btn-secondary">
                       <StopCircle size={16} />
                       <span>End Session</span>
                     </button>
@@ -266,7 +288,7 @@ export default function SessionDetailPage() {
                   <span>Export CSV</span>
                 </button>
                 {isAdmin && (
-                  <button onClick={handleDeleteSession} className="btn btn-danger" title="Delete this session">
+                  <button onClick={requestDeleteSession} className="btn btn-danger" title="Delete this session">
                     <Trash2 size={16} />
                     <span>Delete</span>
                   </button>
@@ -338,7 +360,7 @@ export default function SessionDetailPage() {
                   <ArrowUpDown size={14} style={{ color: "var(--text-muted)" }} />
                   <select
                     className="form-input"
-                    style={{ fontSize: "0.85rem", height: "36px", padding: "0 10px" }}
+                    style={{ fontSize: "0.85rem", height: "36px", padding: "0 8px" }}
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
                   >
@@ -425,7 +447,7 @@ export default function SessionDetailPage() {
                         </td>
                         <td style={{ textAlign: "right" }}>
                           <button
-                            onClick={() => handleRemoveRecord(attendee.usn)}
+                            onClick={() => requestRemoveRecord(attendee.usn)}
                             className="btn btn-danger btn-sm"
                             title="Remove record"
                           >
@@ -441,6 +463,18 @@ export default function SessionDetailPage() {
           </div>
         </>
       )}
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        cancelText="Cancel"
+        danger={confirmModal.danger}
+        loading={actionLoading}
+        onConfirm={handleModalConfirm}
+        onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }
