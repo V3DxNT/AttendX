@@ -54,6 +54,14 @@ export default function LiveScannerPage() {
     }
   }, [sessionId, user, router]);
 
+  const attachVideo = (node) => {
+    videoRef.current = node;
+    if (node && streamRef.current) {
+      node.srcObject = streamRef.current;
+      node.play().catch(() => {});
+    }
+  };
+
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -66,7 +74,7 @@ export default function LiveScannerPage() {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.play().catch(() => {});
       }
       setCameraError("");
     } catch (err) {
@@ -248,7 +256,7 @@ export default function LiveScannerPage() {
               </div>
             ) : (
               <>
-                <video ref={videoRef} autoPlay playsInline muted className="scanner-video" />
+                <video ref={attachVideo} autoPlay playsInline muted className="scanner-video" />
                 <div className={`scanner-reticle ${scanStatus.state === "success" ? "success" : scanStatus.state === "error" ? "error" : ""}`} />
                 <div className="scanner-overlay">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
