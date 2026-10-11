@@ -142,7 +142,7 @@ export default function AuthSlider({ initialMode = "login" }) {
                 className="form-input"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="faculty@university.edu"
+                placeholder="rajesh.kumar@college.edu"
               />
             </div>
 
@@ -215,7 +215,7 @@ export default function AuthSlider({ initialMode = "login" }) {
                 className="form-input"
                 value={signupFullName}
                 onChange={(e) => setSignupFullName(e.target.value)}
-                placeholder="Prof. Alan Turing"
+                placeholder="Dr. Rajesh Kumar"
               />
             </div>
 
@@ -227,7 +227,7 @@ export default function AuthSlider({ initialMode = "login" }) {
                 className="form-input"
                 value={signupEmail}
                 onChange={(e) => setSignupEmail(e.target.value)}
-                placeholder="alan@university.edu"
+                placeholder="rajesh.kumar@college.edu"
               />
             </div>
 

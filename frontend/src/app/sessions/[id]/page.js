@@ -7,6 +7,7 @@ import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../context/ToastContext";
 import { apiFetch } from "../../../lib/api";
 import ConfirmModal from "../../../components/ConfirmModal";
+import ImageModal from "../../../components/ImageModal";
 import { SkeletonSessionDashboard } from "../../../components/Skeleton";
 import { CapDoodle } from "../../../components/DoodleIcons";
 import { Camera, Download, Trash2, Plus, AlertCircle, CheckCircle2, StopCircle, ArrowLeft, Clock, Calendar, ArrowUpDown, Search } from "lucide-react";
@@ -24,6 +25,7 @@ export default function SessionDetailPage() {
   const [submittingManual, setSubmittingManual] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("time_desc");
+  const [previewAttendee, setPreviewAttendee] = useState(null);
 
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -370,7 +372,7 @@ export default function SessionDetailPage() {
                     type="text"
                     className="form-input"
                     style={{ paddingLeft: "32px", paddingRight: "10px", fontSize: "0.85rem", height: "36px" }}
-                    placeholder="Search USN or Name..."
+                    placeholder="Search USN or Name (e.g. 1MS21CS099, Aarav)..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -446,7 +448,13 @@ export default function SessionDetailPage() {
                     {processedAttendees.map((attendee) => (
                       <tr key={attendee.usn}>
                         <td>
-                          <img src={attendee.thumbnail} alt={attendee.full_name} className="avatar-sm" />
+                          <img
+                            src={attendee.thumbnail}
+                            alt={attendee.full_name}
+                            className="avatar-sm avatar-clickable"
+                            onClick={() => setPreviewAttendee(attendee)}
+                            title="Click to inspect captured attendance photo"
+                          />
                         </td>
                         <td>
                           <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--accent-indigo)" }}>
@@ -494,6 +502,23 @@ export default function SessionDetailPage() {
         loading={actionLoading}
         onConfirm={handleModalConfirm}
         onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      <ImageModal
+        isOpen={!!previewAttendee}
+        onClose={() => setPreviewAttendee(null)}
+        title={previewAttendee?.full_name}
+        subtitle={previewAttendee?.usn}
+        tag={previewAttendee?.captured_photo ? "Live Captured at Attendance" : "Enrolled Registration Photo"}
+        imageUrl={previewAttendee?.thumbnail}
+        secondaryImageUrl={previewAttendee?.captured_photo && previewAttendee?.registered_thumbnail ? previewAttendee.registered_thumbnail : null}
+        secondaryLabel="Enrolled Photo"
+        metadata={[
+          { label: "USN", value: previewAttendee?.usn },
+          { label: "Capture Time", value: formatTime(previewAttendee?.marked_at) },
+          { label: "Verification Method", value: previewAttendee?.method === "face" ? "Biometric Face Recognition" : "Manual Override" },
+          { label: "Photo Type", value: previewAttendee?.captured_photo ? "Live Camera Snapshot" : "Default Registration" },
+        ]}
       />
     </div>
   );

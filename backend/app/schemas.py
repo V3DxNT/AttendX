@@ -97,6 +97,8 @@ class DashboardAttendee(BaseModel):
     usn: str
     full_name: str
     thumbnail: str
+    registered_thumbnail: Optional[str] = None
+    captured_photo: Optional[str] = None
     marked_at: str
     method: str
 

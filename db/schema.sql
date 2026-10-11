@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS attendance_records (
     method      TEXT NOT NULL DEFAULT 'face' CHECK (method IN ('face', 'manual')),
     distance    REAL,
     marked_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    captured_photo TEXT,
     CONSTRAINT unique_student_session UNIQUE (session_id, student_id)
 );
 CREATE INDEX IF NOT EXISTS idx_records_session ON attendance_records(session_id);

@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { apiFetch } from "../../lib/api";
 import ConfirmModal from "../../components/ConfirmModal";
+import ImageModal from "../../components/ImageModal";
 import { SkeletonStudentTable } from "../../components/Skeleton";
 import { NotebookDoodle, StarDoodle } from "../../components/DoodleIcons";
 import { Plus, Search, Trash2, Camera, AlertCircle, X, Check, RotateCcw } from "lucide-react";
@@ -30,6 +31,7 @@ export default function StudentsPage() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [previewStudent, setPreviewStudent] = useState(null);
 
   const [cameraMode, setCameraMode] = useState(null);
   const [cameraError, setCameraError] = useState("");
@@ -271,7 +273,7 @@ export default function StudentsPage() {
           type="text"
           className="form-input"
           style={{ paddingLeft: "42px" }}
-          placeholder="Search by USN or student name..."
+          placeholder="Search by USN or student name (e.g. 1MS21CS099, Aarav)..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -305,7 +307,13 @@ export default function StudentsPage() {
               {students.map((s) => (
                 <tr key={s.usn}>
                   <td>
-                    <img src={s.thumbnail} alt={s.full_name} className="avatar-sm" />
+                    <img
+                      src={s.thumbnail}
+                      alt={s.full_name}
+                      className="avatar-sm avatar-clickable"
+                      onClick={() => setPreviewStudent(s)}
+                      title="Click to enlarge student biometric photo"
+                    />
                   </td>
                   <td>
                     <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--accent-indigo)" }}>
@@ -387,7 +395,7 @@ export default function StudentsPage() {
                   className="form-input"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Vedant Sharma"
+                  placeholder="Aarav Sharma"
                 />
               </div>
 
@@ -589,6 +597,20 @@ export default function StudentsPage() {
         loading={deleting}
         onConfirm={confirmDeleteStudent}
         onClose={() => setDeleteTarget(null)}
+      />
+
+      <ImageModal
+        isOpen={!!previewStudent}
+        onClose={() => setPreviewStudent(null)}
+        title={previewStudent?.full_name}
+        subtitle={previewStudent?.usn}
+        tag="Enrolled Registration Photo"
+        imageUrl={previewStudent?.thumbnail}
+        metadata={[
+          { label: "USN", value: previewStudent?.usn },
+          { label: "Student Name", value: previewStudent?.full_name },
+          { label: "Biometric Record", value: "Verified Active" },
+        ]}
       />
     </div>
   );

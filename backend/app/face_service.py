@@ -123,12 +123,12 @@ def create_face_thumbnail(img: np.ndarray, bbox: List[float]) -> str:
     if cropped.size == 0:
         cropped = img
 
-    resized = cv2.resize(cropped, (96, 96), interpolation=cv2.INTER_AREA)
+    resized = cv2.resize(cropped, (160, 160), interpolation=cv2.INTER_AREA)
 
-    success, buf = cv2.imencode(".webp", resized, [cv2.IMWRITE_WEBP_QUALITY, 60])
+    success, buf = cv2.imencode(".webp", resized, [cv2.IMWRITE_WEBP_QUALITY, 75])
     mime = "image/webp"
     if not success:
-        success, buf = cv2.imencode(".jpg", resized, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        success, buf = cv2.imencode(".jpg", resized, [cv2.IMWRITE_JPEG_QUALITY, 80])
         mime = "image/jpeg"
 
     encoded = base64.b64encode(buf.tobytes()).decode("utf-8")

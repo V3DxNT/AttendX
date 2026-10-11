@@ -339,12 +339,13 @@ async def mark_face_attendance(
     student_id: UUID,
     distance: float,
     marked_by: UUID,
+    captured_photo: Optional[str] = None,
 ) -> Tuple[bool, datetime]:
     pool = get_pool()
     row = await pool.fetchrow(
         """
-        INSERT INTO attendance_records (session_id, student_id, method, distance, marked_by)
-        VALUES ($1, $2, 'face', $3, $4)
+        INSERT INTO attendance_records (session_id, student_id, method, distance, marked_by, captured_photo)
+        VALUES ($1, $2, 'face', $3, $4, $5)
         ON CONFLICT (session_id, student_id) DO NOTHING
         RETURNING marked_at
         """,
@@ -352,6 +353,7 @@ async def mark_face_attendance(
         student_id,
         distance,
         marked_by,
+        captured_photo,
     )
     if row:
         return True, row["marked_at"]
@@ -402,7 +404,7 @@ async def get_session_dashboard(session_id: UUID) -> Optional[dict]:
     total_enrolled = enrolled_row["total"] if enrolled_row else 0
     attendee_rows = await pool.fetch(
         """
-        SELECT s.usn, s.full_name, s.thumbnail, r.marked_at, r.method
+        SELECT s.usn, s.full_name, s.thumbnail AS registered_thumbnail, r.captured_photo, r.marked_at, r.method
         FROM attendance_records r
         JOIN students s ON s.id = r.student_id
         WHERE r.session_id = $1
@@ -414,7 +416,9 @@ async def get_session_dashboard(session_id: UUID) -> Optional[dict]:
         {
             "usn": r["usn"],
             "full_name": r["full_name"],
-            "thumbnail": r["thumbnail"],
+            "thumbnail": r["captured_photo"] or r["registered_thumbnail"],
+            "registered_thumbnail": r["registered_thumbnail"],
+            "captured_photo": r["captured_photo"],
             "marked_at": r["marked_at"].isoformat(),
             "method": r["method"],
         }

@@ -178,7 +178,7 @@ async def mark_session_attendance(
             status_code=409,
         )
 
-    live_embedding, _ = await process_face_image(body.image_base64)
+    live_embedding, live_thumbnail = await process_face_image(body.image_base64)
     nearest = await find_nearest_student_face(vector_to_str(live_embedding))
 
     if not nearest or float(nearest["distance"]) > settings.MATCH_THRESHOLD:
@@ -194,6 +194,7 @@ async def mark_session_attendance(
         student_id=nearest["id"],
         distance=float(nearest["distance"]),
         marked_by=current_user["id"],
+        captured_photo=live_thumbnail,
     )
 
     if not inserted:
@@ -206,7 +207,9 @@ async def mark_session_attendance(
                 "student": {
                     "usn": nearest["usn"],
                     "full_name": nearest["full_name"],
-                    "thumbnail": nearest["thumbnail"],
+                    "thumbnail": live_thumbnail or nearest["thumbnail"],
+                    "registered_thumbnail": nearest["thumbnail"],
+                    "captured_photo": live_thumbnail,
                     "marked_at": marked_at.isoformat() if marked_at else None,
                 }
             },
@@ -218,7 +221,9 @@ async def mark_session_attendance(
         "student": {
             "usn": nearest["usn"],
             "full_name": nearest["full_name"],
-            "thumbnail": nearest["thumbnail"],
+            "thumbnail": live_thumbnail or nearest["thumbnail"],
+            "registered_thumbnail": nearest["thumbnail"],
+            "captured_photo": live_thumbnail,
             "marked_at": marked_at.isoformat() if marked_at else None,
         },
         "distance": round(float(nearest["distance"]), 4),
