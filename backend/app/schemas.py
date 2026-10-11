@@ -12,7 +12,7 @@ class UserResponse(BaseModel):
 class SignupRequest(BaseModel):
     email: str
     full_name: str = Field(..., min_length=1, max_length=100)
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=1, max_length=128)
     invite_code: str
 
     @field_validator("email")

@@ -51,11 +51,6 @@ export default function AuthSlider({ initialMode = "login" }) {
     e.preventDefault();
     setSignupError("");
 
-    if (signupPassword.length < 8) {
-      setSignupError("Password must be at least 8 characters long.");
-      return;
-    }
-
     setSignupLoading(true);
 
     try {
@@ -241,15 +236,11 @@ export default function AuthSlider({ initialMode = "login" }) {
               <input
                 type="password"
                 required
-                minLength={8}
                 className="form-input"
                 value={signupPassword}
                 onChange={(e) => setSignupPassword(e.target.value)}
                 placeholder="••••••••"
               />
-              <span style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "6px" }}>
-                Minimum 8 characters
-              </span>
             </div>
 
             <div className="form-group" style={{ marginBottom: "20px" }}>
