@@ -273,7 +273,7 @@ export default function StudentsPage() {
           type="text"
           className="form-input"
           style={{ paddingLeft: "42px" }}
-          placeholder="Search by USN or student name (e.g. 1MS21CS099, Aarav)..."
+          placeholder="Search by USN or student name (e.g. 1NT23CS336, Vedant)..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -383,7 +383,7 @@ export default function StudentsPage() {
                   style={{ textTransform: "uppercase", fontFamily: "var(--font-mono)" }}
                   value={usn}
                   onChange={(e) => setUsn(e.target.value.toUpperCase())}
-                  placeholder="1MS21CS099"
+                  placeholder="1NT23CS336"
                 />
               </div>
 
@@ -395,7 +395,7 @@ export default function StudentsPage() {
                   className="form-input"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Aarav Sharma"
+                  placeholder="Vedant Asthana"
                 />
               </div>
 

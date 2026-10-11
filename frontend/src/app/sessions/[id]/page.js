@@ -336,7 +336,7 @@ export default function SessionDetailPage() {
             <form onSubmit={handleManualAdd} style={{ display: "flex", gap: "12px", maxWidth: "480px" }}>
               <input
                 type="text"
-                placeholder="Enter Student USN (e.g. 1MS21CS099)"
+                placeholder="Enter Student USN (e.g. 1NT23CS336)"
                 className="form-input"
                 style={{ textTransform: "uppercase", fontFamily: "var(--font-mono)" }}
                 value={manualUsn}
@@ -372,7 +372,7 @@ export default function SessionDetailPage() {
                     type="text"
                     className="form-input"
                     style={{ paddingLeft: "32px", paddingRight: "10px", fontSize: "0.85rem", height: "36px" }}
-                    placeholder="Search USN or Name (e.g. 1MS21CS099, Aarav)..."
+                    placeholder="Search USN or Name (e.g. 1NT24CS336, Vedant)..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
