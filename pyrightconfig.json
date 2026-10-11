@@ -1,5 +1,7 @@
 {
   "extraPaths": [
     "backend"
-  ]
+  ],
+  "reportMissingImports": "none",
+  "reportMissingTypeStubs": false
 }

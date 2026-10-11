@@ -1,5 +1,9 @@
 {
   "python.analysis.extraPaths": [
     "./backend"
-  ]
+  ],
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingImports": "none",
+    "reportMissingTypeStubs": "none"
+  }
 }
