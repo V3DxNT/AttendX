@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: attendx-backend
-  namespace: cv-attendance
+  namespace: attendx
   labels:
     app: attendx-backend
 spec:

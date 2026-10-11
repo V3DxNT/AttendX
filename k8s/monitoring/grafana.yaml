@@ -53,7 +53,7 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
           "targets": [
             {
-              "expr": "rate(container_cpu_usage_seconds_total{namespace=\"cv-attendance\",container=\"backend\"}[1m])",
+              "expr": "rate(container_cpu_usage_seconds_total{namespace=\"attendx\",container=\"backend\"}[1m])",
               "legendFormat": "CPU Usage"
             }
           ]
@@ -64,7 +64,7 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
           "targets": [
             {
-              "expr": "container_memory_working_set_bytes{namespace=\"cv-attendance\",container=\"backend\"}",
+              "expr": "container_memory_working_set_bytes{namespace=\"attendx\",container=\"backend\"}",
               "legendFormat": "Memory"
             }
           ]
@@ -75,7 +75,7 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
           "targets": [
             {
-              "expr": "sum(rate(http_requests_total{namespace=\"cv-attendance\"}[1m]))",
+              "expr": "sum(rate(http_requests_total{namespace=\"attendx\"}[1m]))",
               "legendFormat": "Requests / sec"
             }
           ]
@@ -86,7 +86,7 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"cv-attendance\"}[5m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"attendx\"}[5m])) by (le))",
               "legendFormat": "P95 Latency"
             }
           ]

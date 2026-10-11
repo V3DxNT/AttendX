@@ -29,12 +29,19 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content=content)
 
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    err_list = []
+    for err in exc.errors():
+        loc = err.get("loc", [])
+        field_name = str(loc[-1]) if loc else "field"
+        msg = err.get("msg", "Invalid value")
+        err_list.append(f"{field_name}: {msg}")
+    friendly_msg = ", ".join(err_list) if err_list else "Validation failed"
     return JSONResponse(
         status_code=422,
         content={
             "status": "ERROR",
             "code": "VALIDATION_ERROR",
-            "message": "Validation failed",
+            "message": friendly_msg,
             "data": {"details": exc.errors()},
         },
     )

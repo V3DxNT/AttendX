@@ -50,6 +50,12 @@ export default function AuthSlider({ initialMode = "login" }) {
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
     setSignupError("");
+
+    if (signupPassword.length < 8) {
+      setSignupError("Password must be at least 8 characters long.");
+      return;
+    }
+
     setSignupLoading(true);
 
     try {
@@ -60,6 +66,13 @@ export default function AuthSlider({ initialMode = "login" }) {
         setSignupError("Invalid registration invite code.");
       } else if (err.code === "EMAIL_EXISTS") {
         setSignupError("An account with this email already exists.");
+      } else if (err.code === "VALIDATION_ERROR" && err.data?.details) {
+        const details = err.data.details;
+        const msg = details.map((d) => {
+          const field = d.loc ? d.loc[d.loc.length - 1] : "";
+          return field ? `${field}: ${d.msg}` : d.msg;
+        }).join("; ") || err.message;
+        setSignupError(msg);
       } else {
         setSignupError(err.message || "Failed to register.");
       }
@@ -228,11 +241,15 @@ export default function AuthSlider({ initialMode = "login" }) {
               <input
                 type="password"
                 required
+                minLength={8}
                 className="form-input"
                 value={signupPassword}
                 onChange={(e) => setSignupPassword(e.target.value)}
                 placeholder="••••••••"
               />
+              <span style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "6px" }}>
+                Minimum 8 characters
+              </span>
             </div>
 
             <div className="form-group" style={{ marginBottom: "20px" }}>

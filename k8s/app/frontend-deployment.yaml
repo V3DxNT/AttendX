@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: attendx-frontend
-  namespace: cv-attendance
+  namespace: attendx
   labels:
     app: attendx-frontend
 spec:
@@ -31,7 +31,7 @@ spec:
               name: http
           env:
             - name: BACKEND_URL
-              value: "http://attendx-backend-service.cv-attendance.svc.cluster.local:8000"
+              value: "http://attendx-backend-service.attendx.svc.cluster.local:8000"
             - name: PORT
               value: "3000"
           resources:
