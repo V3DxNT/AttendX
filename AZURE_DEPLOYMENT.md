@@ -1,10 +1,10 @@
 # AttendX Azure Cloud & Kubernetes Deployment Guide
 
-This guide details the complete production deployment of AttendX on Microsoft Azure using the Azure Portal (Web UI), Docker, Azure Kubernetes Service (AKS), Ingress, Horizontal Pod Autoscaler (HPA), Vertical Pod Autoscaler (VPA), Prometheus, and Grafana.
+This guide details the complete production deployment of AttendX on Microsoft Azure using the Azure Portal (Web UI), Docker, Azure Kubernetes Service (AKS), native Kubernetes manifests without Helm, Ingress, Horizontal Pod Autoscaler (HPA), Vertical Pod Autoscaler (VPA), Prometheus, and Grafana.
 
 ---
 
-## 1. Cloud Architecture & Azure Services
+## 1. Cloud Architecture & Production Services
 
 ```
                        Internet Traffic / End Users
@@ -14,7 +14,7 @@ This guide details the complete production deployment of AttendX on Microsoft Az
                                      |
                                      v
                        [ NGINX Ingress Controller ]
-                         (SSL/TLS via Cert-Manager)
+                         (Official Cloud Manifest)
                                      |
                    +-----------------+-----------------+
                    | Path: /                           | Path: /api
@@ -27,16 +27,16 @@ This guide details the complete production deployment of AttendX on Microsoft Az
                    v                                   v
        +-----------------------+           +-----------------------+
        |     Frontend Pods     |           |     Backend Pods      |
-       |  (HPA: 2 - 5 Replicas)|           |  (HPA: 2 - 10 Replicas)
+       |  (HPA: 1 - 5 Replicas)|           |  (HPA: 1 - 10 Replicas)
        +-----------------------+           +-----------------------+
                                                        |
                                      +-----------------+-----------------+
                                      |                                   |
                                      v                                   v
                         +-------------------------+         +-------------------------+
-                        |  Azure Container Reg.   |         | Azure Database for      |
-                        |      (ACR Basic)        |         | PostgreSQL Flexible     |
-                        | (attendxcr.azurecr.io)  |         | (pgvector enabled)      |
+                        |  Azure Container Reg.   |         |   Managed Supabase      |
+                        |      (ACR Basic)        |         |   PostgreSQL Instance   |
+                        | (attendxcr.azurecr.io)  |         | (pgvector + Port 5432)  |
                         +-------------------------+         +-------------------------+
                                                                          ^
                                                                          | Scrapes /metrics
@@ -46,102 +46,82 @@ This guide details the complete production deployment of AttendX on Microsoft Az
                                                             +-------------------------+
 ```
 
+### Production Database Decision: Supabase PostgreSQL
+AttendX utilizes Supabase PostgreSQL in production rather than provisioning a duplicate Azure Database for PostgreSQL Flexible Server for the following technical and operational reasons:
+1. **Pre-configured Vector Support**: Supabase has native `pgvector` enabled, and our schemas (`students`, `face_embeddings`, `attendance_logs`, `sessions`, `users`, `system_settings`), cosine indexes (`vector_cosine_ops`), and enrolled biometric vectors are already configured and validated.
+2. **Cost Optimization**: Provisioning an Azure Database for PostgreSQL Flexible Server adds recurring monthly costs, whereas an existing managed Supabase instance incurs zero additional database provisioning fees.
+3. **Encrypted Network Transit**: AKS backend pods securely communicate with Supabase over TLS (`sslmode=require`) through connection pooling on port 6543 (Supavisor) or direct connections on port 5432.
+4. **Secret Decoupling**: Database credentials reside entirely in a Kubernetes Secret (`backend-secrets`), allowing environment independence without hardcoded endpoints.
+
 ### Azure Services Utilized:
-1. **Azure Resource Group (`rg-attendx-prod`)**: Logical grouping container for all provisioned cloud resources.
-2. **Azure Container Registry (`attendxcr`)**: Private Docker image registry storing signed container images.
-3. **Azure Kubernetes Service (`aks-attendx-cluster`)**: Managed Kubernetes cluster managing high availability, pod scheduling, and health reconciliation.
-4. **Azure Database for PostgreSQL Flexible Server (`psql-attendx-prod`)**: Fully managed relational database with the `pgvector` extension enabled for biometric embedding searches.
-5. **Azure Public IP & Standard Load Balancer**: Automatically provisioned by the NGINX Ingress Controller for ingress routing.
+1. **Azure Resource Group (`rg-attendx-prod`)**: Logical grouping for all cloud compute and container resources.
+2. **Azure Container Registry (`attendxcr`)**: Private Docker image registry storing verified AttendX backend and frontend container images.
+3. **Azure Kubernetes Service (`aks-attendx-cluster`)**: Managed Kubernetes cluster managing scheduling, scaling, and health reconciliation.
+4. **Azure Public IP & Standard Load Balancer**: Automatically provisioned by the NGINX Ingress Controller service to expose the cluster externally.
 
 ---
 
-## 2. Step-by-Step Azure Portal (UI) Provisioning
+## 2. Azure Portal (UI) Provisioning Walkthrough
 
 ### Step 2.1: Create the Resource Group
 1. Open the [Azure Portal](https://portal.azure.com) in your browser.
-2. In the top search bar, type `Resource groups` and select it.
+2. In the top search bar, search for `Resource groups` and select it.
 3. Click **+ Create**.
-4. Fill in:
+4. Configure the settings:
    - **Subscription**: Select your active Azure subscription.
    - **Resource group**: `rg-attendx-prod`
-   - **Region**: `East US` (or your nearest preferred region).
-5. Click **Review + create** -> **Create**.
+   - **Region**: `East US` (or your nearest preferred location).
+5. Click **Review + create**, then click **Create**.
 
 ---
 
 ### Step 2.2: Create Azure Container Registry (ACR)
 1. Search for `Container registries` in the search bar and select it.
 2. Click **+ Create**.
-3. Fill in the **Basics** tab:
+3. Configure the **Basics** tab:
    - **Resource group**: `rg-attendx-prod`
-   - **Registry name**: `attendxcr` (must be globally unique, all lowercase alphanumeric).
+   - **Registry name**: `attendxcr` (must be globally unique and alphanumeric).
    - **Location**: `East US`.
-   - **SKU**: `Basic` (cost-effective for production images).
-4. Click **Review + create** -> **Create**.
-5. Once deployment completes, click **Go to resource**.
-6. Under **Settings** -> select **Access keys**.
-7. Toggle **Admin user** to **Enabled**. Note down:
+   - **SKU**: `Basic`.
+4. Click **Review + create**, then click **Create**.
+5. When provisioning finishes, click **Go to resource**.
+6. In the left sidebar under **Settings**, select **Access keys**.
+7. Toggle **Admin user** to **Enabled**.
+8. Record the following values for building and pushing:
    - Login server: `attendxcr.azurecr.io`
    - Username: `attendxcr`
-   - password: `<password-1>`
+   - Password: `<your-acr-password>`
 
 ---
 
-### Step 2.3: Create Azure Database for PostgreSQL Flexible Server
-1. Search for `Azure Database for PostgreSQL flexible servers` and select it.
-2. Click **+ Create**.
-3. Fill in the **Basics** tab:
-   - **Resource group**: `rg-attendx-prod`
-   - **Server name**: `psql-attendx-prod` (globally unique).
-   - **Region**: `East US`.
-   - **PostgreSQL version**: `16`.
-   - **Workload type**: `Development` or `Small/Medium size production`.
-   - **Compute + storage**: Click *Configure server* -> select **Burstable**, **B1ms** or **B2s** (1-2 vCPU, 2-4 GiB RAM), 32 GiB storage.
-   - **Authentication**: `PostgreSQL authentication only`.
-   - **Admin username**: `attendxadmin`
-   - **Password**: `<secure-database-password>`
-4. In the **Networking** tab:
-   - **Connectivity method**: `Public access (allowed IP addresses)`.
-   - Check the box: **Allow public access from any Azure service within Azure to this server**.
-   - Click **+ Add current client IP address** so you can connect from your local workstation if needed.
-5. Click **Review + create** -> **Create**.
-6. Once created, go to the database resource in the Azure Portal:
-   - In the left menu under **Settings**, select **Server parameters**.
-   - Search for `azure.extensions`.
-   - Check `VECTOR` in the multi-select dropdown.
-   - Click **Save** at the top.
-   - In the left menu under **Settings**, select **Databases** -> click **+ Add** -> Database name: `attendx_db` -> **Save**.
-
----
-
-### Step 2.4: Create Azure Kubernetes Service (AKS) Cluster
-1. Search for `Kubernetes services` and select it.
-2. Click **+ Create** -> select **Create a Kubernetes cluster**.
-3. **Basics Tab**:
+### Step 2.3: Create Azure Kubernetes Service (AKS) Cluster
+1. Search for `Kubernetes services` in the search bar and select it.
+2. Click **+ Create** and choose **Create a Kubernetes cluster**.
+3. Configure the **Basics** tab:
    - **Resource group**: `rg-attendx-prod`
    - **Cluster preset configuration**: `Dev/Test` or `Cost-optimised`.
    - **Kubernetes cluster name**: `aks-attendx-cluster`
    - **Region**: `East US`.
-   - **Kubernetes version**: Select the latest stable default (e.g., 1.28 or 1.29).
+   - **Kubernetes version**: Select the default stable version (e.g., 1.28 or 1.29).
    - **Node pools**:
-     - Agent pool name: `nodepool1`
-     - Node size: Click *Choose a size* -> Select **Standard_B2s** (2 vCPU, 4 GiB RAM) or **Standard_D2s_v5** (2 vCPU, 8 GiB RAM).
-     - Scale method: `Manual` with Node count: `2` (or `Autoscale` 1 to 3).
-4. **Networking Tab**:
-   - **Network configuration**: `Kubenet` (simpler, cost-efficient).
-5. **Integrations Tab**:
-   - **Container registry**: Click the dropdown and select **attendxcr** (this automatically sets up the `AcrPull` managed identity role assignment without needing manual secrets).
-6. **Monitoring Tab**:
-   - Azure Container Insights can be disabled if using the custom Prometheus & Grafana stack described below.
-7. Click **Review + create** -> **Create**. (Provisioning takes ~5-8 minutes).
+     - Name: `nodepool1`
+     - Node size: Click *Choose a size* and select `Standard_B2s` (2 vCPU, 4 GiB RAM) or `Standard_D2s_v5` (2 vCPU, 8 GiB RAM).
+     - Scale method: `Manual` with Node count set to `2` (or `Autoscale` between 1 and 3).
+4. Configure the **Networking** tab:
+   - **Network configuration**: `Kubenet`.
+5. Configure the **Integrations** tab:
+   - **Container registry**: Select **attendxcr** from the dropdown. This automatically attaches the `AcrPull` role to AKS so pods can pull images without manual image pull secrets.
+6. Configure the **Monitoring** tab:
+   - Azure Container Insights can remain unchecked since we deploy native Prometheus and Grafana.
+7. Click **Review + create**, then click **Create**. Deployment will take roughly 5 to 7 minutes.
 
 ---
 
-### Step 2.5: Connect to the Cluster
-Once the AKS cluster is provisioned:
-1. Open the cluster in the Azure Portal.
-2. Click the **Connect** button on the overview toolbar.
-3. You can either use the **Azure Cloud Shell** (built into the portal toolbar at the top `>_`) or run locally:
+### Step 2.4: Connect to the Cluster
+Once the cluster deployment is complete:
+1. Open the AKS cluster in the Azure Portal.
+2. Click **Connect** on the overview toolbar.
+3. Use the Azure Cloud Shell (`>_` button in the Azure Portal top bar) or run in your local terminal:
 
 ```bash
 az login
@@ -149,29 +129,29 @@ az account set --subscription "<YOUR_SUBSCRIPTION_ID>"
 az aks get-credentials --resource-group rg-attendx-prod --name aks-attendx-cluster
 ```
 
-Verify the connection:
+Verify connection to the nodes:
 ```bash
 kubectl get nodes
 ```
 
 ---
 
-## 3. Containerization & Registry Push
+## 3. Container Image Build & Push
 
-Run from the root of the repository on your workstation or CI/CD runner:
+Run the following commands from the root of the repository:
 
-### 3.1 Authenticate with ACR
+### 3.1 Authenticate Docker with Azure Container Registry
 ```bash
 docker login attendxcr.azurecr.io -u attendxcr -p <ACR_PASSWORD>
 ```
 
-### 3.2 Build & Push Backend Container
+### 3.2 Build and Push Backend Image
 ```bash
 docker build -t attendxcr.azurecr.io/attendx-backend:v1 ./backend
 docker push attendxcr.azurecr.io/attendx-backend:v1
 ```
 
-### 3.3 Build & Push Frontend Container
+### 3.3 Build and Push Frontend Image
 ```bash
 docker build -t attendxcr.azurecr.io/attendx-frontend:v1 ./frontend
 docker push attendxcr.azurecr.io/attendx-frontend:v1
@@ -179,500 +159,289 @@ docker push attendxcr.azurecr.io/attendx-frontend:v1
 
 ---
 
-## 4. Kubernetes Manifests
+## 4. Helm-Free Kubernetes Architecture Explained
 
-Create a directory named `k8s-deploy/` or execute the manifests below sequentially:
+This deployment uses 100% native declarative Kubernetes manifests (`kubectl apply -f`). This provides direct control and complete visibility over each Kubernetes API object:
 
-### 4.1 Namespaces (`00-namespaces.yaml`)
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: attendx
+| Kubernetes Primitive | File Location | Architectural Purpose |
+| :--- | :--- | :--- |
+| **Namespace** | `k8s/app/namespace.yaml` | Isolates AttendX workloads in the `attendx` namespace. |
+| **ConfigMap** | `k8s/app/configmap.yaml` | Provides non-sensitive runtime configuration parameters (thresholds, origins, durations). |
+| **Secret** | `k8s/app/secret.yaml` | Protects sensitive credentials (Supabase `DATABASE_URL`, JWT signing keys, invite codes). |
+| **Deployment (Backend)** | `k8s/app/deployment.yaml` | Manages backend pod replicas, resource limits, rolling updates, and health probes. |
+| **Service (Backend)** | `k8s/app/service.yaml` | Provides internal DNS name `attendx-backend-service` and load balances across backend pods. |
+| **Deployment (Frontend)** | `k8s/app/frontend-deployment.yaml` | Manages Next.js frontend pod replicas and points `BACKEND_URL` to internal backend service. |
+| **Service (Frontend)** | `k8s/app/frontend-service.yaml` | Provides internal DNS name `attendx-frontend-service` on port 3000. |
+| **Ingress** | `k8s/app/ingress.yaml` | Routes external HTTP traffic: `/api` to the backend and `/` to the frontend. |
+| **HPA** | `k8s/app/hpa.yaml` | Automatically scales backend and frontend pods horizontally under CPU/memory load. |
+| **VPA** | `k8s/app/vpa.yaml` | Analyzes resource consumption and outputs recommendations for CPU and memory sizing. |
+| **RBAC & Prometheus** | `k8s/monitoring/prometheus.yaml` | Deploys Prometheus with ClusterRole and ServiceAccount to scrape cluster metrics. |
+| **Grafana** | `k8s/monitoring/grafana.yaml` | Deploys Grafana with pre-wired Prometheus datasource for real-time visualization. |
+
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: monitoring
-```
 
-Apply:
+## 5. Step-by-Step Native Kubernetes Deployment
+
+### Step 5.1: Deploy Official NGINX Ingress Controller (Without Helm)
+Deploy the official cloud-provider NGINX Ingress Controller manifest directly via `kubectl`:
+
 ```bash
-kubectl apply -f 00-namespaces.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/cloud/deploy.yaml
 ```
 
----
-
-### 4.2 Database & Application Secrets (`01-secrets.yaml`)
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: attendx-secrets
-  namespace: attendx
-type: Opaque
-stringData:
-  DATABASE_URL: "postgresql://attendxadmin:<SECURE_PASSWORD>@psql-attendx-prod.postgres.database.azure.com:5432/attendx_db"
-  JWT_SECRET_KEY: "prod-attendx-super-secret-key-change-in-production-2026"
-  SIGNUP_INVITE_CODE: "attendx-secret-invite-2026"
-```
-
-Apply:
-```bash
-kubectl apply -f 01-secrets.yaml
-```
-
----
-
-### 4.3 Backend Deployment & Service (`02-backend.yaml`)
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: attendx-backend
-  namespace: attendx
-  labels:
-    app: attendx-backend
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: attendx-backend
-  template:
-    metadata:
-      labels:
-        app: attendx-backend
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/path: "/metrics"
-        prometheus.io/port: "8000"
-    spec:
-      containers:
-        - name: backend
-          image: attendxcr.azurecr.io/attendx-backend:v1
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 8000
-          env:
-            - name: SUPABASE_DB_URL
-              valueFrom:
-                secretKeyRef:
-                  name: attendx-secrets
-                  key: DATABASE_URL
-            - name: JWT_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: attendx-secrets
-                  key: JWT_SECRET_KEY
-            - name: SIGNUP_INVITE_CODE
-              valueFrom:
-                secretKeyRef:
-                  name: attendx-secrets
-                  key: SIGNUP_INVITE_CODE
-          resources:
-            requests:
-              cpu: "300m"
-              memory: "512Mi"
-            limits:
-              cpu: "1500m"
-              memory: "1536Mi"
-          livenessProbe:
-            httpGet:
-              path: /api/v1/health/live
-              port: 8000
-            initialDelaySeconds: 20
-            periodSeconds: 15
-          readinessProbe:
-            httpGet:
-              path: /api/v1/health/ready
-              port: 8000
-            initialDelaySeconds: 15
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: attendx-backend-svc
-  namespace: attendx
-  labels:
-    app: attendx-backend
-spec:
-  type: ClusterIP
-  selector:
-    app: attendx-backend
-  ports:
-    - name: http
-      port: 8000
-      targetPort: 8000
-```
-
-Apply:
-```bash
-kubectl apply -f 02-backend.yaml
-```
-
----
-
-### 4.4 Frontend Deployment & Service (`03-frontend.yaml`)
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: attendx-frontend
-  namespace: attendx
-  labels:
-    app: attendx-frontend
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: attendx-frontend
-  template:
-    metadata:
-      labels:
-        app: attendx-frontend
-    spec:
-      containers:
-        - name: frontend
-          image: attendxcr.azurecr.io/attendx-frontend:v1
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 3000
-          env:
-            - name: BACKEND_INTERNAL_URL
-              value: "http://attendx-backend-svc.attendx.svc.cluster.local:8000"
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 3000
-            initialDelaySeconds: 10
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: attendx-frontend-svc
-  namespace: attendx
-  labels:
-    app: attendx-frontend
-spec:
-  type: ClusterIP
-  selector:
-    app: attendx-frontend
-  ports:
-    - name: http
-      port: 3000
-      targetPort: 3000
-```
-
-Apply:
-```bash
-kubectl apply -f 03-frontend.yaml
-```
-
----
-
-## 5. Ingress Controller & Routing
-
-### 5.1 Install NGINX Ingress Controller via Helm
-```bash
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm repo update
-
-helm install ingress-nginx ingress-nginx/ingress-nginx \
-  --namespace ingress-nginx \
-  --create-namespace \
-  --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path"=/healthz
-```
-
-Retrieve the public LoadBalancer IP:
+Wait for Azure to allocate an external Public IP:
 ```bash
 kubectl get svc -n ingress-nginx ingress-nginx-controller -w
 ```
 
-### 5.2 Configure Ingress Routing (`04-ingress.yaml`)
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: attendx-ingress
-  namespace: attendx
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/proxy-body-size: "15m"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
-spec:
-  rules:
-    - http:
-        paths:
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: attendx-backend-svc
-                port:
-                  number: 8000
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: attendx-frontend-svc
-                port:
-                  number: 3000
+When the `EXTERNAL-IP` changes from `<pending>` to a public IP (e.g., `20.120.45.10`), note this IP address.
+
+---
+
+### Step 5.2: Create Application Namespace
+```bash
+kubectl apply -f k8s/app/namespace.yaml
 ```
 
-Apply:
+Verify:
 ```bash
-kubectl apply -f 04-ingress.yaml
+kubectl get namespaces
 ```
 
 ---
 
-## 6. Autoscaling: HPA & VPA
+### Step 5.3: Create Production Secrets (Supabase Credentials)
+Prepare your production secret containing your Supabase database URL. Create `k8s/app/secret.yaml` from `k8s/app/secret.example.yaml`:
 
-### 6.1 Horizontal Pod Autoscaler (HPA)
-The Horizontal Pod Autoscaler monitors CPU and memory utilization reported by the Kubernetes `metrics-server` (built into AKS) and automatically scales pods up during heavy camera scanning bursts.
-
-#### HPA Manifest (`05-hpa.yaml`)
 ```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+apiVersion: v1
+kind: Secret
 metadata:
-  name: attendx-backend-hpa
+  name: backend-secrets
   namespace: attendx
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: attendx-backend
-  minReplicas: 2
-  maxReplicas: 8
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 80
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 0
-      policies:
-        - type: Percent
-          value: 100
-          periodSeconds: 15
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-        - type: Percent
-          value: 20
-          periodSeconds: 60
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: attendx-frontend-hpa
-  namespace: attendx
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: attendx-frontend
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 75
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://postgres:<YOUR-SUPABASE-PASSWORD>@db.<YOUR-PROJECT-REF>.supabase.co:5432/postgres?sslmode=require"
+  JWT_SECRET: "attendx-production-secure-random-jwt-key-minimum-32-characters"
+  SIGNUP_INVITE_CODE: "attendx-secret-invite-2026"
+  ADMIN_EMAIL: "admin@attendx.local"
+  ADMIN_PASSWORD: "<YOUR-ADMIN-PASSWORD>"
 ```
 
-Apply:
+Apply the secret:
 ```bash
-kubectl apply -f 05-hpa.yaml
+kubectl apply -f k8s/app/secret.yaml
 ```
 
-View HPA status:
+Verify creation without exposing values:
+```bash
+kubectl get secret backend-secrets -n attendx
+```
+
+---
+
+### Step 5.4: Apply Application ConfigMap
+Update `FRONTEND_URL` in `k8s/app/configmap.yaml` with your Public IP or domain (e.g., `http://20.120.45.10`):
+
+```bash
+kubectl apply -f k8s/app/configmap.yaml
+```
+
+---
+
+### Step 5.5: Deploy Backend Service and Deployment
+Substitute your ACR login server and image tag in `k8s/app/deployment.yaml`, then apply:
+
+```bash
+sed -i.bak "s|\${ACR_LOGIN_SERVER}|attendxcr.azurecr.io|g; s|\${IMAGE_TAG}|v1|g" k8s/app/deployment.yaml
+kubectl apply -f k8s/app/deployment.yaml
+kubectl apply -f k8s/app/service.yaml
+```
+
+Check backend rollout status:
+```bash
+kubectl rollout status deployment/attendx-backend -n attendx
+```
+
+---
+
+### Step 5.6: Deploy Frontend Service and Deployment
+Substitute your ACR login server and image tag in `k8s/app/frontend-deployment.yaml`, then apply:
+
+```bash
+sed -i.bak "s|\${ACR_LOGIN_SERVER}|attendxcr.azurecr.io|g; s|\${IMAGE_TAG}|v1|g" k8s/app/frontend-deployment.yaml
+kubectl apply -f k8s/app/frontend-deployment.yaml
+kubectl apply -f k8s/app/frontend-service.yaml
+```
+
+Check frontend rollout status:
+```bash
+kubectl rollout status deployment/attendx-frontend -n attendx
+```
+
+---
+
+### Step 5.7: Apply Ingress Routing
+Apply the unified Ingress rule:
+```bash
+kubectl apply -f k8s/app/ingress.yaml
+```
+
+Verify Ingress status:
+```bash
+kubectl get ingress -n attendx
+```
+
+At this stage, browsing to `http://<EXTERNAL-IP>` opens the AttendX frontend, and `http://<EXTERNAL-IP>/api/health` opens the backend health endpoint.
+
+---
+
+### Step 5.8: Apply Autoscaling (HPA & VPA)
+Apply the Horizontal Pod Autoscalers:
+```bash
+kubectl apply -f k8s/app/hpa.yaml
+```
+
+Check HPA target tracking:
 ```bash
 kubectl get hpa -n attendx
 ```
 
-CLI quick-scale command:
+Apply the Vertical Pod Autoscaler:
 ```bash
-kubectl autoscale deployment attendx-backend --cpu-percent=70 --min=2 --max=8 -n attendx
+kubectl apply -f k8s/app/vpa.yaml
+```
+
+Check VPA status:
+```bash
+kubectl get vpa -n attendx
 ```
 
 ---
 
-### 6.2 Vertical Pod Autoscaler (VPA)
-While HPA scales the number of replicas, VPA recommends and adjusts the CPU/memory request and limit sizes for computer vision pods that experience variable memory demand depending on image resolutions.
+## 6. Native Monitoring & Observability Stack (Without Helm)
 
-#### Install VPA CRDs:
+The monitoring stack is deployed directly from native manifests in `k8s/monitoring/`.
+
+### Step 6.1: Create Monitoring Namespace
 ```bash
-git clone https://github.com/kubernetes/autoscaler.git
-cd autoscaler/vertical-pod-autoscaler
-./hack/vpa-up.sh
-cd ../..
-rm -rf autoscaler
-```
-
-#### VPA Manifest (`06-vpa.yaml`)
-```yaml
-apiVersion: autoscaling.k8s.io/v1
-kind: VerticalPodAutoscaler
-metadata:
-  name: attendx-backend-vpa
-  namespace: attendx
-spec:
-  targetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: attendx-backend
-  updatePolicy:
-    updateMode: "Initial"
-  resourcePolicy:
-    containerPolicies:
-      - containerName: backend
-        minAllowed:
-          cpu: "250m"
-          memory: "384Mi"
-        maxAllowed:
-          cpu: "2000m"
-          memory: "2048Mi"
-        controlledResources: ["cpu", "memory"]
-```
-
-Apply:
-```bash
-kubectl apply -f 06-vpa.yaml
-```
-
-View VPA recommendations:
-```bash
-kubectl describe vpa attendx-backend-vpa -n attendx
+kubectl apply -f k8s/monitoring/namespace.yaml
 ```
 
 ---
 
-## 7. Monitoring & Observability (Prometheus + Grafana)
+### Step 6.2: Deploy Prometheus
+The manifest `k8s/monitoring/prometheus.yaml` defines:
+- A `ServiceAccount` and RBAC `ClusterRole` / `ClusterRoleBinding` granting read access to cluster nodes and pod metrics endpoints.
+- A `ConfigMap` configuring Prometheus to scrape `attendx-backend-service.attendx.svc.cluster.local:8000/metrics` every 15 seconds.
+- A `Deployment` running Prometheus with local storage.
+- A `Service` exposing Prometheus internally on port 9090.
 
-### 7.1 Install Kube-Prometheus Stack via Helm
+Apply Prometheus:
 ```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-
-helm install prometheus-stack prometheus-community/kube-prometheus-stack \
-  --namespace monitoring \
-  --set grafana.adminPassword="<SECURE_GRAFANA_PASSWORD>" \
-  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
+kubectl apply -f k8s/monitoring/prometheus.yaml
 ```
 
-### 7.2 ServiceMonitor for FastAPI (`07-servicemonitor.yaml`)
-```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: attendx-backend-monitor
-  namespace: monitoring
-  labels:
-    release: prometheus-stack
-spec:
-  selector:
-    matchLabels:
-      app: attendx-backend
-  namespaceSelector:
-    matchNames:
-      - attendx
-  endpoints:
-    - port: http
-      path: /metrics
-      interval: 15s
-```
-
-Apply:
+Check Prometheus rollout:
 ```bash
-kubectl apply -f 07-servicemonitor.yaml
+kubectl rollout status deployment/prometheus -n monitoring
 ```
 
-### 7.3 Accessing Grafana Dashboard
-Access Grafana locally using secure port forwarding:
+---
+
+### Step 6.3: Deploy Grafana
+The manifest `k8s/monitoring/grafana.yaml` defines:
+- A `ConfigMap` configuring the default Prometheus datasource pointing to `http://prometheus-service.monitoring.svc.cluster.local:9090`.
+- A `Deployment` running Grafana with authentication configured.
+- A `Service` exposing Grafana on port 80.
+
+Apply Grafana:
 ```bash
-kubectl port-forward svc/prometheus-stack-grafana 3001:80 -n monitoring
+kubectl apply -f k8s/monitoring/grafana.yaml
 ```
+
+Check Grafana rollout:
+```bash
+kubectl rollout status deployment/grafana -n monitoring
+```
+
+---
+
+### Step 6.4: Accessing Grafana & Prometheus Dashboards
+
+Forward Grafana to your local workstation:
+```bash
+kubectl port-forward svc/grafana-service 3001:80 -n monitoring
+```
+
 Open `http://localhost:3001` in your browser:
 - Username: `admin`
-- Password: `<SECURE_GRAFANA_PASSWORD>`
+- Password: `adminpassword` (configured in `k8s/monitoring/grafana.yaml`)
 
-### 7.4 Essential PromQL Queries for AttendX
-Create a custom Grafana dashboard with the following metrics:
+Forward Prometheus to inspect raw metrics:
+```bash
+kubectl port-forward svc/prometheus-service 9090:9090 -n monitoring
+```
 
-1. **HTTP Request Rate (Throughput per endpoint)**:
-   ```promql
-   sum(rate(http_requests_total{job="attendx-backend-monitor"}[1m])) by (handler, status)
-   ```
-
-2. **95th Percentile API Latency (p95 response time)**:
-   ```promql
-   histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, handler))
-   ```
-
-3. **Face Scan Error Rate (Failed scans vs successes)**:
-   ```promql
-   sum(rate(http_requests_total{handler=~".*scan.*", status=~"4..|5.."}[1m])) / sum(rate(http_requests_total{handler=~".*scan.*"}[1m])) * 100
-   ```
-
-4. **Pod CPU Utilization vs Limits**:
-   ```promql
-   sum(rate(container_cpu_usage_seconds_total{namespace="attendx", container="backend"}[1m])) by (pod)
-   ```
-
-5. **Pod Memory Usage**:
-   ```promql
-   sum(container_memory_working_set_bytes{namespace="attendx", container="backend"}) by (pod) / (1024 * 1024)
-   ```
+Open `http://localhost:9090` in your browser.
 
 ---
 
-## 8. Operational DevOps Runbook & Management
+### Step 6.5: Key PromQL Queries for AttendX
 
-### Useful `kubectl` Management Commands:
+1. **API Request Throughput**:
+```promql
+sum(rate(http_requests_total[1m])) by (handler, status)
+```
+
+2. **P95 Latency for Face Scans**:
+```promql
+histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{handler=~".*scan.*"}[5m])) by (le))
+```
+
+3. **Backend CPU Utilization**:
+```promql
+sum(rate(container_cpu_usage_seconds_total{namespace="attendx", container="backend"}[1m])) by (pod)
+```
+
+4. **Backend Memory Usage**:
+```promql
+sum(container_memory_working_set_bytes{namespace="attendx", container="backend"}) by (pod) / (1024 * 1024)
+```
+
+---
+
+## 7. Production Operations Runbook
+
+### Inspect Running Resources:
 ```bash
 kubectl get pods -n attendx -o wide
 kubectl get svc -n attendx
 kubectl get ingress -n attendx
 kubectl get hpa -n attendx
+```
 
+### View Live Application Logs:
+```bash
 kubectl logs -f deployment/attendx-backend -n attendx
 kubectl logs -f deployment/attendx-frontend -n attendx
+```
 
-kubectl exec -it deployment/attendx-backend -n attendx -- sh
-
-kubectl rollout restart deployment/attendx-backend -n attendx
-kubectl rollout restart deployment/attendx-frontend -n attendx
-
+### Zero-Downtime Rolling Update:
+```bash
+docker build -t attendxcr.azurecr.io/attendx-backend:v2 ./backend
+docker push attendxcr.azurecr.io/attendx-backend:v2
+kubectl set image deployment/attendx-backend backend=attendxcr.azurecr.io/attendx-backend:v2 -n attendx
 kubectl rollout status deployment/attendx-backend -n attendx
+```
+
+### Rollback on Incident:
+```bash
 kubectl rollout undo deployment/attendx-backend -n attendx
 ```
 
-### Cost Optimization (Stopping AKS when not in use):
-To avoid compute costs when the university demo or laboratory session is finished:
-1. Open the AKS cluster in the Azure Portal.
-2. Click **Stop** on the top command bar.
-3. Node compute charges cease immediately while configuration and storage are preserved.
-4. When ready to resume, click **Start**.
+### Stop Cluster to Eliminate Compute Charges:
+When testing or demo sessions conclude, stop node pool billing from the Azure Portal:
+1. Open `aks-attendx-cluster` in the Azure Portal.
+2. Click **Stop** on the top toolbar. Node VM charges stop immediately while cluster configuration and container images are preserved.
+3. When ready to resume, click **Start**.

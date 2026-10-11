@@ -11,7 +11,7 @@ class UserResponse(BaseModel):
 
 class SignupRequest(BaseModel):
     email: str
-    full_name: str = Field(..., min_length=1, max_length=100)
+    full_name: str = Field(..., min_length=1, max_length=100)   
     password: str = Field(..., min_length=1, max_length=128)
     invite_code: str
 
